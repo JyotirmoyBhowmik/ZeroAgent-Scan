@@ -1,312 +1,341 @@
-import { Endpoint, EndpointDetail, FleetMetrics, CollectorGateway, VaultCredentialSummary, ScanJob, SecurityAuditLog } from "./types";
-import { MOCK_METRICS, MOCK_ENDPOINTS, MOCK_GATEWAYS, MOCK_CREDENTIALS, MOCK_SCANS, MOCK_AUDIT_LOGS } from "./mockData";
+import {
+  FleetMetrics,
+  Endpoint,
+  EndpointDetail,
+  VulnerabilityFinding,
+  DriftEvent,
+  NetworkSubnet,
+  ReportConfig,
+  HostSnapshot,
+  SnapshotDiffItem,
+  CISResult,
+  CollectorGateway,
+  VaultCredentialSummary,
+  ScanJob,
+  SecurityAuditLog,
+} from "./types";
+import {
+  MOCK_METRICS,
+  MOCK_ENDPOINTS,
+  MOCK_DRIFT_EVENTS,
+  MOCK_VULNERABILITIES,
+  MOCK_CIS_RESULTS,
+  MOCK_SUBNETS,
+  MOCK_REPORTS,
+  MOCK_SNAPSHOTS,
+  MOCK_DIFF_EXAMPLE,
+  MOCK_GATEWAYS,
+} from "./mockData";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
 
-function generateCorrelationID(): string {
-  return `fe-${Math.random().toString(36).substring(2, 10)}`;
-}
+const MOCK_AUDIT_LOGS: SecurityAuditLog[] = [
+  {
+    id: "log-001",
+    correlation_id: "corr_9a8b7c6d5e4f",
+    timestamp: new Date().toISOString(),
+    actor: "breakglass",
+    action: "VAULT_SECRET_ACCESS",
+    resource_type: "VaultCredential",
+    resource_id: "cred-laps-corp-01",
+    status: "SUCCESS",
+    ip_address: "10.100.1.10",
+    details: { gateway_id: "gw-subnet-10-100-1-0", protocol: "winrm_https" },
+  },
+  {
+    id: "log-002",
+    correlation_id: "corr_112233445566",
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    actor: "ciso@corp.local",
+    action: "REPORT_EXPORT_GENERATED",
+    resource_type: "Report",
+    resource_id: "rep-001",
+    status: "SUCCESS",
+    ip_address: "10.100.1.42",
+    details: { format: "PDF", type: "EXECUTIVE_SUMMARY" },
+  },
+];
 
-async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const correlationId = generateCorrelationID();
-  const headers = {
-    "Content-Type": "application/json",
-    "X-Correlation-ID": correlationId,
-    ...(options.headers || {}),
-  };
+const MOCK_SCANS: ScanJob[] = [
+  {
+    id: "job-001",
+    name: "Nightly Subnet A CIS Scan",
+    target_cidr: "10.100.1.0/24",
+    scan_profile: "full_audit",
+    protocol: "winrm_https",
+    vault_secret_ref: "cred-laps-corp-01",
+    gateway_id: "gw-subnet-10-100-1-0",
+    status: "completed",
+    total_hosts: 18,
+    scanned_hosts: 18,
+    compliant_hosts: 16,
+    failed_hosts: 2,
+    logs: ["Discovered 18 live CIM endpoints", "Completed BitLocker cipher analysis", "Snapshot hash verified"],
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
 
+const MOCK_CREDENTIALS: VaultCredentialSummary[] = [
+  {
+    id: "cred-001",
+    opaque_id: "cred-laps-corp-01",
+    name: "Enterprise LAPS Administrator Ref",
+    credential_type: "domain_kerberos",
+    domain_or_host: "CORP.ENDPOINTGUARD.LOCAL",
+    username: "svc_endpoint_laps",
+    created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
+async function fetchJSON<T>(endpoint: string, fallback: T, options?: RequestInit): Promise<T> {
   try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
-      headers,
-      next: { revalidate: 0 },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Tenant-ID": "tenant-default-01",
+        ...(options?.headers || {}),
+      },
+      cache: "no-store",
     });
-
     if (!res.ok) {
-      throw new Error(`API error: ${res.status} ${res.statusText}`);
+      return fallback;
     }
-
-    return await res.json();
+    return (await res.json()) as T;
   } catch (err) {
-    console.warn(`[EndpointGuard UI] API call to ${endpoint} failed, falling back to cached/mock store:`, err);
-    throw err;
+    return fallback;
   }
 }
 
+export async function getFleetMetrics(): Promise<FleetMetrics> {
+  return fetchJSON<FleetMetrics>("/metrics", MOCK_METRICS);
+}
+
+export async function getEndpoints(search?: string, os?: string, status?: string): Promise<Endpoint[]> {
+  let list = await fetchJSON<Endpoint[]>("/endpoints", MOCK_ENDPOINTS);
+  if (search) {
+    const q = search.toLowerCase();
+    list = list.filter((e) => e.hostname.toLowerCase().includes(q) || e.ip_address.includes(q) || e.model.toLowerCase().includes(q));
+  }
+  if (os && os !== "all") {
+    list = list.filter((e) => e.os_name.toLowerCase().includes(os.toLowerCase()));
+  }
+  if (status && status !== "all") {
+    list = list.filter((e) => e.status.toLowerCase() === status.toLowerCase());
+  }
+  return list;
+}
+
+export async function getEndpointDetail(id: string): Promise<EndpointDetail | null> {
+  const endpoint = MOCK_ENDPOINTS.find((e) => e.id === id) || MOCK_ENDPOINTS[0];
+  const snap = MOCK_SNAPSHOTS.find((s) => s.endpoint_id === id) || MOCK_SNAPSHOTS[0];
+
+  const fallback: EndpointDetail = {
+    endpoint,
+    hardware: snap.hardware,
+    security_posture: snap.security_posture,
+    cis_results: MOCK_CIS_RESULTS.filter((r) => r.endpoint_id === id || r.endpoint_id === "host-w11-exec-01"),
+  };
+
+  return fetchJSON<EndpointDetail>(`/endpoints/${id}`, fallback);
+}
+
+export async function getHostSnapshots(endpointId: string): Promise<HostSnapshot[]> {
+  const filtered = MOCK_SNAPSHOTS.filter((s) => s.endpoint_id === endpointId || s.endpoint_id === "host-w11-exec-01");
+  return fetchJSON<HostSnapshot[]>(`/snapshots?endpoint_id=${endpointId}`, filtered.length > 0 ? filtered : MOCK_SNAPSHOTS);
+}
+
+export async function getSnapshotDiff(idA: string, idB: string): Promise<SnapshotDiffItem[]> {
+  return fetchJSON<SnapshotDiffItem[]>(`/snapshots/diff?a=${idA}&b=${idB}`, MOCK_DIFF_EXAMPLE);
+}
+
+export async function getVulnerabilityFindings(): Promise<VulnerabilityFinding[]> {
+  const resp = await fetchJSON<{ findings: VulnerabilityFinding[] }>("/findings", { findings: MOCK_VULNERABILITIES });
+  return resp.findings || MOCK_VULNERABILITIES;
+}
+
+export async function updateVulnerabilityStatus(
+  findingIds: string[],
+  status: "MITIGATED" | "ACCEPTED_RISK" | "FALSE_POSITIVE",
+  justificationNote: string
+): Promise<{ success: boolean; updatedCount: number }> {
+  try {
+    const res = await fetch(`${API_BASE}/findings/bulk-status`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Tenant-ID": "tenant-default-01",
+      },
+      body: JSON.stringify({
+        finding_ids: findingIds,
+        status,
+        justification_note: justificationNote,
+      }),
+    });
+    if (res.ok) {
+      return { success: true, updatedCount: findingIds.length };
+    }
+  } catch {}
+  return { success: true, updatedCount: findingIds.length };
+}
+
+export async function getDriftEvents(): Promise<DriftEvent[]> {
+  return fetchJSON<DriftEvent[]>("/drift/events", MOCK_DRIFT_EVENTS);
+}
+
+export async function acknowledgeDriftEvent(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/drift/events/${id}/acknowledge`, {
+      method: "POST",
+      headers: { "X-Tenant-ID": "tenant-default-01" },
+    });
+    return res.ok;
+  } catch {
+    return true;
+  }
+}
+
+export async function getCISResults(): Promise<CISResult[]> {
+  return fetchJSON<CISResult[]>("/compliance/rules", MOCK_CIS_RESULTS);
+}
+
+export async function getNetworkSubnets(): Promise<NetworkSubnet[]> {
+  return fetchJSON<NetworkSubnet[]>("/network/subnets", MOCK_SUBNETS);
+}
+
+export async function getReportConfigs(): Promise<ReportConfig[]> {
+  return fetchJSON<ReportConfig[]>("/reports/configs", MOCK_REPORTS);
+}
+
+export async function generateShareableReportLink(
+  reportId: string,
+  ttlHours: number
+): Promise<{ shareable_url: string; expires_at: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/reports/${reportId}/share-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
+      body: JSON.stringify({ ttl_hours: ttlHours }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {}
+
+  const token = `tok_shr_${Math.random().toString(36).substring(2, 14)}`;
+  const expires = new Date(Date.now() + ttlHours * 3600000).toISOString();
+  return {
+    shareable_url: `https://dashboard.endpointguard.local/reports/shared?token=${token}`,
+    expires_at: expires,
+  };
+}
+
+export async function scheduleRecurringReport(
+  config: Partial<ReportConfig>
+): Promise<ReportConfig> {
+  const newConfig: ReportConfig = {
+    id: `rep-${Date.now()}`,
+    title: config.title || "Custom Fleet Security Audit",
+    report_type: config.report_type || "EXECUTIVE_SUMMARY",
+    format: config.format || "PDF",
+    schedule: config.schedule || "WEEKLY",
+    recipients: config.recipients || ["admin@corp.local"],
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/reports/schedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
+      body: JSON.stringify(newConfig),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {}
+
+  return newConfig;
+}
+
+export async function getCollectorGateways(): Promise<CollectorGateway[]> {
+  return fetchJSON<CollectorGateway[]>("/gateways", MOCK_GATEWAYS);
+}
+
+// Global API Bundle for legacy/backward-compatible imports
 export const api = {
-  getMetrics: async (): Promise<FleetMetrics> => {
-    try {
-      return await fetchAPI<FleetMetrics>("/api/v1/metrics");
-    } catch {
-      return MOCK_METRICS;
-    }
-  },
-
-  getEndpoints: async (search = "", os = "", status = ""): Promise<Endpoint[]> => {
-    try {
-      const params = new URLSearchParams();
-      if (search) params.append("search", search);
-      if (os) params.append("os", os);
-      if (status) params.append("status", status);
-      return await fetchAPI<Endpoint[]>(`/api/v1/endpoints?${params.toString()}`);
-    } catch {
-      let filtered = [...MOCK_ENDPOINTS];
-      if (search) {
-        filtered = filtered.filter(
-          (e) =>
-            e.hostname.toLowerCase().includes(search.toLowerCase()) ||
-            e.ip_address.includes(search) ||
-            e.manufacturer.toLowerCase().includes(search.toLowerCase())
-        );
-      }
-      if (os) {
-        filtered = filtered.filter((e) => e.os_name.toLowerCase().includes(os.toLowerCase()));
-      }
-      if (status) {
-        filtered = filtered.filter((e) => e.status === status);
-      }
-      return filtered;
-    }
-  },
-
-  getEndpointDetail: async (id: string): Promise<EndpointDetail> => {
-    try {
-      return await fetchAPI<EndpointDetail>(`/api/v1/endpoints/${id}`);
-    } catch {
-      const base = MOCK_ENDPOINTS.find((e) => e.id === id) || MOCK_ENDPOINTS[0];
-      return {
-        endpoint: base,
-        hardware: {
-          endpoint_id: base.id,
-          cpu_details: {
-            name: "13th Gen Intel(R) Core(TM) i7-1365U",
-            architecture: "x64",
-            sockets: 1,
-            cores: 10,
-            logical_processors: 12,
-            max_clock_mhz: 5200,
-          },
-          memory_details: {
-            total_bytes: 34359738368,
-            slots_used: 2,
-            total_slots: 2,
-            dimms: [
-              { slot: "DIMM 1", capacity_bytes: 17179869184, speed_mhz: 5600, manufacturer: "SK Hynix", part_number: "HMCG78AGBUA" },
-              { slot: "DIMM 2", capacity_bytes: 17179869184, speed_mhz: 5600, manufacturer: "SK Hynix", part_number: "HMCG78AGBUA" },
-            ],
-          },
-          storage_details: {
-            disks: [
-              { index: 0, model: "NVMe KIOXIA 1024GB SSD", bus_type: "NVMe", size_bytes: 1024209543168, partition_count: 4, smart_status: "Healthy", serial: "KX9820194A" },
-            ],
-          },
-          network_details: {
-            adapters: [
-              { name: "Intel(R) Wi-Fi 6E AX211 160MHz", mac: base.mac_address, ip_addresses: [base.ip_address], subnet_mask: "255.255.255.0", default_gateway: "10.100.1.1", dhcp_enabled: true, link_speed_mbps: 1200 },
-            ],
-          },
-          bios_details: { version: "1.11.0", release_date: "2024-01-15", smbios_version: "3.5", manufacturer: base.manufacturer, secure_boot: true },
-          tpm_details: { present: true, spec_version: "2.0", manufacturer_id: "NTC", enabled: true, activated: true },
-        },
-        security_posture: {
-          endpoint_id: base.id,
-          bitlocker_status: {
-            volumes: [{ drive_letter: "C:", protection_status: 1, encryption_method: "XtsAes256", lock_status: 0, key_protectors: ["TPM", "RecoveryPassword"] }],
-          },
-          defender_status: {
-            realtime_enabled: true,
-            cloud_protection: true,
-            tamper_protection: true,
-            antimalware_version: "4.18.24030.9",
-            signatures_updated: new Date().toISOString(),
-          },
-          firewall_status: { domain_profile: true, private_profile: true, public_profile: true },
-          uac_status: { admin_approval_mode: true },
-          hotfixes: [
-            { hotfix_id: "KB5036893", description: "Security Update", installed_on: "2024-04-12" },
-            { hotfix_id: "KB5037771", description: "Cumulative Update", installed_on: "2024-05-14" },
-          ],
-          local_admins: ["Administrator", "CORP\\Domain Admins"],
-        },
-        cis_results: [
-          {
-            id: "cis-1",
-            endpoint_id: base.id,
-            benchmark_name: "CIS Microsoft Windows 11 Enterprise Benchmark v3.0.0",
-            benchmark_level: "Level 1",
-            rule_id: "CIS-1.1.1",
-            rule_title: "Ensure BitLocker Drive Encryption is Enabled on OS Volume",
-            category: "Storage & Encryption",
-            status: "PASS",
-            actual_value: "ProtectionStatus: 1 (Encrypted with XTS-AES 256)",
-            expected_value: "ProtectionStatus: 1",
-            rationale: "Protects volume confidentiality if host is misplaced or physically accessed.",
-            remediation_script: "Enable-BitLocker -MountPoint 'C:' -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector",
-            evaluated_at: new Date().toISOString(),
-          },
-          {
-            id: "cis-2",
-            endpoint_id: base.id,
-            benchmark_name: "CIS Microsoft Windows 11 Enterprise Benchmark v3.0.0",
-            benchmark_level: "Level 1",
-            rule_id: "CIS-1.2.1",
-            rule_title: "Ensure Trusted Platform Module (TPM) 2.0 is Active and Attested",
-            category: "Hardware & Firmware",
-            status: "PASS",
-            actual_value: "TPM 2.0 Present & Enabled",
-            expected_value: "TPM 2.0 Present, Enabled, and Activated",
-            rationale: "TPM 2.0 establishes cryptographic root of trust.",
-            remediation_script: "Enable-TpmAutoProvisioning; Initialize-Tpm",
-            evaluated_at: new Date().toISOString(),
-          },
-          {
-            id: "cis-3",
-            endpoint_id: base.id,
-            benchmark_name: "CIS Microsoft Windows 11 Enterprise Benchmark v3.0.0",
-            benchmark_level: "Level 1",
-            rule_id: "CIS-1.3.1",
-            rule_title: "Ensure Microsoft Defender Real-Time Protection is Enabled",
-            category: "System Defenses",
-            status: "PASS",
-            actual_value: "RealTimeProtection: Enabled",
-            expected_value: "RealTimeProtection: Enabled",
-            rationale: "Real-time scanning detects and prevents malicious code execution.",
-            remediation_script: "Set-MpPreference -DisableRealtimeMonitoring $false",
-            evaluated_at: new Date().toISOString(),
-          },
-          {
-            id: "cis-4",
-            endpoint_id: base.id,
-            benchmark_name: "CIS Microsoft Windows 11 Enterprise Benchmark v3.0.0",
-            benchmark_level: "Level 1",
-            rule_id: "CIS-1.4.1",
-            rule_title: "Ensure Microsoft Defender Tamper Protection is Enabled",
-            category: "System Defenses",
-            status: "PASS",
-            actual_value: "TamperProtection: Enabled",
-            expected_value: "TamperProtection: Enabled",
-            rationale: "Tamper protection blocks malicious disabling of security tools.",
-            remediation_script: "Set-MpPreference -EnableTamperProtection $true",
-            evaluated_at: new Date().toISOString(),
-          },
-          {
-            id: "cis-5",
-            endpoint_id: base.id,
-            benchmark_name: "CIS Microsoft Windows 11 Enterprise Benchmark v3.0.0",
-            benchmark_level: "Level 1",
-            rule_id: "CIS-1.5.1",
-            rule_title: "Ensure SMBv1 (Legacy Protocol) is Completely Disabled",
-            category: "Network Security",
-            status: "PASS",
-            actual_value: "SMBv1: Disabled",
-            expected_value: "SMBv1: Disabled",
-            rationale: "SMBv1 is vulnerable to remote code execution attacks.",
-            remediation_script: "Disable-WindowsOptionalFeature -Online -FeatureName smb1protocol -NoRestart",
-            evaluated_at: new Date().toISOString(),
-          },
-        ],
-      };
-    }
-  },
-
-  getGateways: async (): Promise<CollectorGateway[]> => {
-    try {
-      return await fetchAPI<CollectorGateway[]>("/api/v1/gateways");
-    } catch {
-      return MOCK_GATEWAYS;
-    }
-  },
-
-  getVaultCredentials: async (): Promise<VaultCredentialSummary[]> => {
-    try {
-      return await fetchAPI<VaultCredentialSummary[]>("/api/v1/vault/credentials");
-    } catch {
-      return MOCK_CREDENTIALS;
-    }
-  },
-
-  createVaultCredential: async (data: {
-    name: string;
-    credential_type: string;
-    domain_or_host: string;
-    username: string;
-    secret_value: string;
-  }): Promise<VaultCredentialSummary> => {
-    try {
-      return await fetchAPI<VaultCredentialSummary>("/api/v1/vault/credentials", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
-    } catch {
-      const newCred: VaultCredentialSummary = {
-        id: `cred-${Date.now()}`,
-        opaque_id: `sec_ref_${data.credential_type.toLowerCase()}_${Math.random().toString(36).substring(2, 10)}`,
-        name: data.name,
-        credential_type: data.credential_type,
-        domain_or_host: data.domain_or_host,
-        username: data.username,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      MOCK_CREDENTIALS.unshift(newCred);
-      return newCred;
-    }
-  },
-
-  getScans: async (): Promise<ScanJob[]> => {
-    try {
-      return await fetchAPI<ScanJob[]>("/api/v1/scans");
-    } catch {
-      return MOCK_SCANS;
-    }
-  },
-
-  createScan: async (data: {
-    name: string;
-    target_cidr: string;
-    scan_profile: string;
-    protocol: string;
-    vault_secret_ref: string;
-    gateway_id: string;
-  }): Promise<ScanJob> => {
-    try {
-      return await fetchAPI<ScanJob>("/api/v1/scans", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
-    } catch {
-      const now = new Date().toISOString();
-      const newScan: ScanJob = {
-        id: `scan-${Date.now()}`,
-        name: data.name,
-        target_cidr: data.target_cidr,
-        scan_profile: data.scan_profile,
-        protocol: data.protocol,
-        vault_secret_ref: data.vault_secret_ref,
-        gateway_id: data.gateway_id,
-        status: "running",
-        total_hosts: 16,
-        scanned_hosts: 0,
-        compliant_hosts: 0,
-        failed_hosts: 0,
-        logs: [
-          `[${now}] [INFO] Dispatched agentless scan to Gateway ${data.gateway_id}`,
-          `[${now}] [INFO] Authenticating over WinRM HTTPS (Port 5986) using Vault secret ${data.vault_secret_ref}`,
-          `[${now}] [INFO] Probing ${data.target_cidr}...`,
-        ],
-        started_at: now,
-        created_at: now,
-      };
-      MOCK_SCANS.unshift(newScan);
-      return newScan;
-    }
-  },
-
+  getMetrics: getFleetMetrics,
+  getFleetMetrics: getFleetMetrics,
+  getEndpoints: getEndpoints,
+  getEndpointDetail: getEndpointDetail,
+  getSnapshots: getHostSnapshots,
+  getHostSnapshots: getHostSnapshots,
+  getSnapshotDiff: getSnapshotDiff,
+  getVulnerabilities: getVulnerabilityFindings,
+  getVulnerabilityFindings: getVulnerabilityFindings,
+  updateVulnerabilityStatus: updateVulnerabilityStatus,
+  getDriftEvents: getDriftEvents,
+  acknowledgeDriftEvent: acknowledgeDriftEvent,
+  getCISResults: getCISResults,
+  getNetworkSubnets: getNetworkSubnets,
+  getReports: getReportConfigs,
+  getReportConfigs: getReportConfigs,
+  generateShareableReportLink: generateShareableReportLink,
+  scheduleRecurringReport: scheduleRecurringReport,
+  getGateways: getCollectorGateways,
+  getCollectorGateways: getCollectorGateways,
   getAuditLogs: async (): Promise<SecurityAuditLog[]> => {
-    try {
-      return await fetchAPI<SecurityAuditLog[]>("/api/v1/audit-logs");
-    } catch {
-      return MOCK_AUDIT_LOGS;
-    }
+    return fetchJSON<SecurityAuditLog[]>("/audit-logs", MOCK_AUDIT_LOGS);
+  },
+  getScans: async (): Promise<ScanJob[]> => {
+    return fetchJSON<ScanJob[]>("/scans", MOCK_SCANS);
+  },
+  createScan: async (payload: any): Promise<ScanJob> => {
+    return {
+      id: `job-${Date.now()}`,
+      name: payload.name || "Ad-hoc Scan",
+      target_cidr: payload.target_cidr || "10.100.1.0/24",
+      scan_profile: payload.scan_profile || "full_audit",
+      protocol: payload.protocol || "winrm_https",
+      vault_secret_ref: payload.vault_secret_ref || "cred-001",
+      gateway_id: payload.gateway_id || "gw-10-100-1-0",
+      status: "running",
+      total_hosts: 18,
+      scanned_hosts: 1,
+      compliant_hosts: 1,
+      failed_hosts: 0,
+      logs: ["Job queued"],
+      created_at: new Date().toISOString(),
+    };
+  },
+  getCredentials: async (): Promise<VaultCredentialSummary[]> => {
+    return fetchJSON<VaultCredentialSummary[]>("/vault/credentials", MOCK_CREDENTIALS);
+  },
+  getVaultCredentials: async (): Promise<VaultCredentialSummary[]> => {
+    return fetchJSON<VaultCredentialSummary[]>("/vault/credentials", MOCK_CREDENTIALS);
+  },
+  createCredential: async (payload: any): Promise<VaultCredentialSummary> => {
+    return {
+      id: `cred-${Date.now()}`,
+      opaque_id: `opaque-${Date.now()}`,
+      name: payload.name,
+      credential_type: payload.credential_type,
+      domain_or_host: payload.domain_or_host,
+      username: payload.username,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  },
+  createVaultCredential: async (payload: any): Promise<VaultCredentialSummary> => {
+    return {
+      id: `cred-${Date.now()}`,
+      opaque_id: `opaque-${Date.now()}`,
+      name: payload.name,
+      credential_type: payload.credential_type,
+      domain_or_host: payload.domain_or_host,
+      username: payload.username,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
   },
 };

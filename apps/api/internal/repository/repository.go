@@ -21,6 +21,7 @@ type Repository struct {
 	credentials  map[string]*models.VaultCredentialSummary
 	cisResults   map[string][]models.CISResult
 	auditLogs    []models.SecurityAuditLog
+	snapshots    map[string]*models.HostSnapshotEntry
 }
 
 func NewRepository() *Repository {
@@ -33,6 +34,7 @@ func NewRepository() *Repository {
 		credentials: make(map[string]*models.VaultCredentialSummary),
 		cisResults:  make(map[string][]models.CISResult),
 		auditLogs:   make([]models.SecurityAuditLog, 0),
+		snapshots:   make(map[string]*models.HostSnapshotEntry),
 	}
 
 	repo.seedInitialData()
@@ -570,6 +572,12 @@ func (r *Repository) ListGateways() []models.CollectorGateway {
 	return result
 }
 
+func (r *Repository) AddGateway(gw *models.CollectorGateway) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.gateways[gw.ID] = gw
+}
+
 func (r *Repository) UpdateGatewayHeartbeat(gatewayCode string, latencyMs int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -678,4 +686,169 @@ func AuditLogFromVaultEntry(entry vault.SecretResolutionAuditEntry) models.Secur
 			"tenant_id":   entry.TenantID,
 		},
 	}
+}
+
+// SaveSnapshot stores a host telemetry snapshot.
+func (r *Repository) SaveSnapshot(entry models.HostSnapshotEntry) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if entry.ID == "" {
+		entry.ID = uuid.New().String()
+	}
+	if entry.CreatedAt.IsZero() {
+		entry.CreatedAt = time.Now().UTC()
+	}
+	r.snapshots[entry.ID] = &entry
+	return nil
+}
+
+// GetSnapshotByID retrieves a snapshot by ID.
+func (r *Repository) GetSnapshotByID(tenantID, id string) (*models.HostSnapshotEntry, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	snap, exists := r.snapshots[id]
+	if !exists || (tenantID != "" && snap.TenantID != tenantID) {
+		return nil, false
+	}
+	return snap, true
+}
+
+// ListSnapshotsKeyset returns a keyset-paginated slice of host snapshots.
+func (r *Repository) ListSnapshotsKeyset(tenantID, hostID string, req KeysetPageRequest) (*KeysetPageResponse[models.HostSnapshotEntry], error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var all []models.HostSnapshotEntry
+	for _, snap := range r.snapshots {
+		if tenantID != "" && snap.TenantID != tenantID {
+			continue
+		}
+		if hostID != "" && snap.HostID != hostID {
+			continue
+		}
+		all = append(all, *snap)
+	}
+
+	// Sort descending by CreatedAt, then ID
+	for i := 0; i < len(all); i++ {
+		for j := i + 1; j < len(all); j++ {
+			if all[j].CreatedAt.After(all[i].CreatedAt) || (all[j].CreatedAt.Equal(all[i].CreatedAt) && all[j].ID > all[i].ID) {
+				all[i], all[j] = all[j], all[i]
+			}
+		}
+	}
+
+	// Apply cursor
+	startIndex := 0
+	if req.Cursor != "" {
+		cursor, err := DecodeCursor(req.Cursor)
+		if err == nil && cursor != nil {
+			for i, item := range all {
+				if item.CreatedAt.Before(cursor.CreatedAt) || (item.CreatedAt.Equal(cursor.CreatedAt) && item.ID < cursor.ID) {
+					startIndex = i
+					break
+				}
+			}
+		}
+	}
+
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+
+	var items []models.HostSnapshotEntry
+	hasMore := false
+	nextCursor := ""
+
+	if startIndex < len(all) {
+		endIndex := startIndex + limit
+		if endIndex < len(all) {
+			hasMore = true
+			items = all[startIndex:endIndex]
+			lastItem := items[len(items)-1]
+			nextCursor = EncodeCursor(lastItem.CreatedAt, lastItem.ID)
+		} else {
+			items = all[startIndex:]
+		}
+	}
+
+	return &KeysetPageResponse[models.HostSnapshotEntry]{
+		Items:      items,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+		Limit:      limit,
+	}, nil
+}
+
+// ListAuditLogsKeyset returns a keyset-paginated slice of audit logs.
+func (r *Repository) ListAuditLogsKeyset(tenantID string, req KeysetPageRequest) (*KeysetPageResponse[models.SecurityAuditLog], error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var all []models.SecurityAuditLog
+	for _, log := range r.auditLogs {
+		if tenantID != "" {
+			if tid, ok := log.Details["tenant_id"].(string); ok && tid != tenantID {
+				continue
+			}
+		}
+		all = append(all, log)
+	}
+
+	// Sort descending by Timestamp, then ID
+	for i := 0; i < len(all); i++ {
+		for j := i + 1; j < len(all); j++ {
+			if all[j].Timestamp.After(all[i].Timestamp) || (all[j].Timestamp.Equal(all[i].Timestamp) && all[j].ID > all[i].ID) {
+				all[i], all[j] = all[j], all[i]
+			}
+		}
+	}
+
+	startIndex := 0
+	if req.Cursor != "" {
+		cursor, err := DecodeCursor(req.Cursor)
+		if err == nil && cursor != nil {
+			for i, item := range all {
+				if item.Timestamp.Before(cursor.CreatedAt) || (item.Timestamp.Equal(cursor.CreatedAt) && item.ID < cursor.ID) {
+					startIndex = i
+					break
+				}
+			}
+		}
+	}
+
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 200 {
+		limit = 200
+	}
+
+	var items []models.SecurityAuditLog
+	hasMore := false
+	nextCursor := ""
+
+	if startIndex < len(all) {
+		endIndex := startIndex + limit
+		if endIndex < len(all) {
+			hasMore = true
+			items = all[startIndex:endIndex]
+			lastItem := items[len(items)-1]
+			nextCursor = EncodeCursor(lastItem.Timestamp, lastItem.ID)
+		} else {
+			items = all[startIndex:]
+		}
+	}
+
+	return &KeysetPageResponse[models.SecurityAuditLog]{
+		Items:      items,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+		Limit:      limit,
+	}, nil
 }

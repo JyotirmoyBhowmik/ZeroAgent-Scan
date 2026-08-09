@@ -33,6 +33,7 @@ type EnvelopeProvider struct {
 
 // envelopeRecord holds the encrypted representation of a single credential.
 type envelopeRecord struct {
+	TenantID        string
 	Ciphertext      []byte
 	Nonce           []byte
 	Salt            []byte
@@ -149,6 +150,7 @@ func (e *EnvelopeProvider) StoreSecret(_ context.Context, ref CredentialRef, pla
 	defer e.mu.Unlock()
 
 	e.records[ref.OpaqueID] = &envelopeRecord{
+		TenantID:        ref.TenantID,
 		Ciphertext:      ciphertext,
 		Nonce:           nonce,
 		Salt:            salt,
@@ -167,7 +169,7 @@ func (e *EnvelopeProvider) StoreSecret(_ context.Context, ref CredentialRef, pla
 func (e *EnvelopeProvider) ResolveSecret(_ context.Context, ref CredentialRef) ([]byte, error) {
 	e.mu.RLock()
 	rec, ok := e.records[ref.OpaqueID]
-	if !ok {
+	if !ok || (rec.TenantID != "" && ref.TenantID != "" && rec.TenantID != ref.TenantID) {
 		e.mu.RUnlock()
 		return nil, fmt.Errorf("%w: ref=%s", ErrSecretNotFound, ref.OpaqueID)
 	}
@@ -204,7 +206,7 @@ func (e *EnvelopeProvider) RotateSecret(_ context.Context, ref CredentialRef, ne
 	defer e.mu.Unlock()
 
 	oldRec, ok := e.records[ref.OpaqueID]
-	if !ok {
+	if !ok || (oldRec.TenantID != "" && ref.TenantID != "" && oldRec.TenantID != ref.TenantID) {
 		return fmt.Errorf("%w: ref=%s", ErrSecretNotFound, ref.OpaqueID)
 	}
 

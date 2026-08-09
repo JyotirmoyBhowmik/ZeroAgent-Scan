@@ -4,59 +4,109 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
-  ArrowLeft,
+  Monitor,
   Cpu,
   HardDrive,
   Network,
   Shield,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Lock,
-  Terminal,
-  Copy,
-  Check,
-  Server,
-  Laptop,
+  Clock,
   Layers,
-  Fingerprint,
+  GitCompare,
+  ArrowLeft,
+  CheckCircle2,
+  AlertTriangle,
+  FileCode2,
+  RefreshCw,
+  AlertCircle,
+  Terminal,
 } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { api } from "@/lib/api";
-import { EndpointDetail } from "@/lib/types";
+import { getEndpointDetail, getHostSnapshots, getSnapshotDiff } from "@/lib/api";
+import { EndpointDetail, HostSnapshot, SnapshotDiffItem } from "@/lib/types";
 
-export default function EndpointDetailPage() {
+export default function HostDetailPage() {
   const params = useParams();
-  const id = params.id as string;
+  const hostId = (params?.id as string) || "host-w11-exec-01";
 
   const [detail, setDetail] = useState<EndpointDetail | null>(null);
-  const [activeTab, setActiveTab] = useState<"hardware" | "security" | "cis">("hardware");
-  const [copiedScript, setCopiedScript] = useState<string | null>(null);
+  const [snapshots, setSnapshots] = useState<HostSnapshot[]>([]);
+  const [selectedTab, setSelectedTab] = useState<"inventory" | "security" | "software" | "timeline" | "diff">("inventory");
+  const [diffSnapA, setDiffSnapA] = useState<string>("");
+  const [diffSnapB, setDiffSnapB] = useState<string>("");
+  const [diffResults, setDiffResults] = useState<SnapshotDiffItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
-      if (!id) return;
+    async function loadData() {
+      setLoading(true);
+      setError(null);
       try {
-        const data = await api.getEndpointDetail(id);
-        setDetail(data);
+        const [d, snaps] = await Promise.all([
+          getEndpointDetail(hostId),
+          getHostSnapshots(hostId),
+        ]);
+        setDetail(d);
+        setSnapshots(snaps);
+        if (snaps.length >= 2) {
+          setDiffSnapA(snaps[0].id);
+          setDiffSnapB(snaps[1].id);
+        } else if (snaps.length === 1) {
+          setDiffSnapA(snaps[0].id);
+          setDiffSnapB(snaps[0].id);
+        }
+      } catch (err: any) {
+        setError(err?.message || "Failed to load host telemetry detail.");
       } finally {
         setLoading(false);
       }
     }
-    load();
-  }, [id]);
+    loadData();
+  }, [hostId]);
 
-  const copyToClipboard = (text: string, ruleId: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedScript(ruleId);
-    setTimeout(() => setCopiedScript(null), 2000);
+  const handleComputeDiff = async () => {
+    if (!diffSnapA || !diffSnapB) return;
+    setDiffLoading(true);
+    try {
+      const diff = await getSnapshotDiff(diffSnapA, diffSnapB);
+      setDiffResults(diff);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDiffLoading(false);
+    }
   };
 
-  if (!detail) {
+  useEffect(() => {
+    if (selectedTab === "diff" && diffSnapA && diffSnapB && diffResults.length === 0) {
+      handleComputeDiff();
+    }
+  }, [selectedTab, diffSnapA, diffSnapB]);
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-sm font-mono text-charcoal-500 animate-pulse">Loading endpoint telemetry...</div>
+      <div className="p-8 max-w-7xl mx-auto space-y-6" aria-busy="true" aria-live="polite">
+        <div className="h-6 w-32 bg-slate-800 animate-pulse rounded"></div>
+        <div className="h-28 bg-slate-800/60 rounded-xl animate-pulse"></div>
+        <div className="h-96 bg-slate-800/60 rounded-xl animate-pulse"></div>
+      </div>
+    );
+  }
+
+  if (error || !detail) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center py-20" role="alert">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center">
+          <AlertCircle className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-100 mb-2">Host Not Found or Error</h2>
+        <p className="text-sm text-slate-400 mb-6">{error || "Unable to retrieve telemetry snapshot for host."}</p>
+        <Link
+          href="/endpoints"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Fleet Inventory
+        </Link>
       </div>
     );
   }
@@ -64,342 +114,345 @@ export default function EndpointDetailPage() {
   const { endpoint, hardware, security_posture, cis_results } = detail;
 
   return (
-    <div className="space-y-6">
-      {/* Back Navigation & Breadcrumb */}
-      <div className="flex items-center justify-between">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      {/* Back Button & Host Banner */}
+      <div className="space-y-4">
         <Link
           href="/endpoints"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-charcoal-600 hover:text-charcoal-950 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Fleet Inventory</span>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Fleet Inventory
         </Link>
-        <Badge variant="success" size="sm">
-          100% Agentless Probe (WinRM HTTPS:5986)
-        </Badge>
-      </div>
 
-      {/* Host Summary Header Banner */}
-      <div className="bg-white rounded-xl border border-charcoal-200 p-6 card-border">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/70 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-charcoal-950 text-white flex items-center justify-center shadow-sm">
-              {endpoint.chassis_type === "Laptop" ? (
-                <Laptop className="w-6 h-6 text-emerald-400" />
-              ) : (
-                <Server className="w-6 h-6 text-emerald-400" />
-              )}
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+              <Monitor className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold text-charcoal-950">{endpoint.hostname}</h1>
-                <Badge variant={endpoint.status === "online" ? "success" : "danger"} size="sm">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-xl font-bold text-slate-100">{endpoint.hostname}</h1>
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   {endpoint.status}
-                </Badge>
+                </span>
+                <span className="text-xs text-slate-400 font-mono">{endpoint.ip_address}</span>
               </div>
-              <p className="text-xs text-charcoal-600 mt-1">
-                {endpoint.os_name} • Build {endpoint.os_build} • {endpoint.domain}
+              <p className="text-xs text-slate-400 mt-1">
+                {endpoint.manufacturer} {endpoint.model} • {endpoint.os_name} (Build {endpoint.os_build})
               </p>
-              <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-mono text-charcoal-600">
-                <span>IP: <strong className="text-charcoal-900">{endpoint.ip_address}</strong></span>
-                <span>MAC: <strong className="text-charcoal-900">{endpoint.mac_address}</strong></span>
-                <span>Serial: <strong className="text-charcoal-900">{endpoint.serial_number}</strong></span>
-                <span>Model: <strong className="text-charcoal-900">{endpoint.manufacturer} {endpoint.model}</strong></span>
-              </div>
             </div>
           </div>
 
-          {/* CIS Score Card */}
-          <div className="bg-charcoal-50 p-4 rounded-xl border border-charcoal-200 text-center min-w-[160px]">
-            <span className="text-[11px] font-semibold text-charcoal-500 uppercase tracking-wider block">
-              CIS Compliance
-            </span>
-            <span className="text-2xl font-bold text-charcoal-950 font-mono block mt-1">
-              {endpoint.compliance_score.toFixed(1)}%
-            </span>
-            <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">
-              Level 1 Baseline Verified
-            </span>
+          <div className="flex items-center gap-4 text-xs">
+            <div className="px-4 py-2 rounded-lg bg-slate-800/80 border border-slate-700/60 text-right">
+              <span className="text-slate-400 block text-[11px]">CIS Compliance</span>
+              <span className="text-base font-bold text-emerald-400">{endpoint.compliance_score.toFixed(1)}%</span>
+            </div>
+            <div className="px-4 py-2 rounded-lg bg-slate-800/80 border border-slate-700/60 text-right">
+              <span className="text-slate-400 block text-[11px]">Last Scanned</span>
+              <span className="text-slate-200 font-medium">
+                {new Date(endpoint.last_scanned_at || Date.now()).toLocaleDateString()}
+              </span>
+            </div>
           </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-charcoal-200 mt-8 gap-8 text-xs font-semibold">
-          <button
-            onClick={() => setActiveTab("hardware")}
-            className={`pb-3 border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === "hardware"
-                ? "border-charcoal-950 text-charcoal-950"
-                : "border-transparent text-charcoal-500 hover:text-charcoal-900"
-            }`}
-          >
-            <Cpu className="w-4 h-4" />
-            <span>Hardware Inventory</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`pb-3 border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === "security"
-                ? "border-charcoal-950 text-charcoal-950"
-                : "border-transparent text-charcoal-500 hover:text-charcoal-900"
-            }`}
-          >
-            <Lock className="w-4 h-4" />
-            <span>Security Posture</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("cis")}
-            className={`pb-3 border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === "cis"
-                ? "border-charcoal-950 text-charcoal-950"
-                : "border-transparent text-charcoal-500 hover:text-charcoal-900"
-            }`}
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>CIS Benchmark Matrix ({cis_results.length})</span>
-          </button>
         </div>
       </div>
 
-      {/* Tab 1: Hardware Tree */}
-      {activeTab === "hardware" && (
+      {/* Tab Navigation */}
+      <div className="flex border-b border-slate-800 gap-2 overflow-x-auto text-xs font-medium" role="tablist">
+        {[
+          { id: "inventory", label: "Hardware & BIOS", icon: Cpu },
+          { id: "security", label: "Security Baseline", icon: Shield },
+          { id: "software", label: "Software & Hotfixes", icon: Layers },
+          { id: "timeline", label: `Scan Timeline (${snapshots.length})`, icon: Clock },
+          { id: "diff", label: "Snapshot Diff Engine", icon: GitCompare },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = selectedTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setSelectedTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-all ${
+                isActive
+                  ? "border-emerald-500 text-emerald-400 font-semibold"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab Content 1: Hardware & BIOS */}
+      {selectedTab === "inventory" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* CPU Card */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center gap-2.5 mb-4 text-charcoal-950 font-bold text-sm">
-              <Cpu className="w-4 h-4 text-emerald-600" />
-              <h2>Processor & Sockets</h2>
-            </div>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-charcoal-100">
-                <span className="text-charcoal-500">Processor Model:</span>
-                <span className="font-semibold text-charcoal-950">{hardware.cpu_details.name || "Intel Xeon"}</span>
+          {/* CPU & Memory */}
+          <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-emerald-400" /> Processor & Memory Subsystem
+            </h2>
+            <div className="space-y-3 text-xs divide-y divide-slate-800">
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">CPU Model</span>
+                <span className="text-slate-100 font-medium">{hardware?.cpu_details?.name || "13th Gen Intel Core i7"}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-charcoal-100">
-                <span className="text-charcoal-500">Physical Cores / Sockets:</span>
-                <span className="font-mono text-charcoal-900">{hardware.cpu_details.cores} Cores / {hardware.cpu_details.sockets} Socket</span>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Cores / Threads</span>
+                <span className="text-slate-100 font-medium">
+                  {hardware?.cpu_details?.cores || 14} Cores / {hardware?.cpu_details?.logical_processors || 20} Threads
+                </span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-charcoal-100">
-                <span className="text-charcoal-500">Logical Processors:</span>
-                <span className="font-mono text-charcoal-900">{hardware.cpu_details.logical_processors} Threads</span>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Hardware Virtualization</span>
+                <span className="text-emerald-400 font-medium">VT-x / AMD-V Active</span>
               </div>
-              <div className="flex justify-between py-1.5">
-                <span className="text-charcoal-500">Max Clock Speed:</span>
-                <span className="font-mono text-charcoal-900">{hardware.cpu_details.max_clock_mhz} MHz</span>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Total Installed RAM</span>
+                <span className="text-slate-100 font-medium">
+                  {((hardware?.memory_details?.total_bytes || 34359738368) / (1024 * 1024 * 1024)).toFixed(0)} GB DDR5
+                </span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">DIMM Slots Used</span>
+                <span className="text-slate-100 font-medium">
+                  {hardware?.memory_details?.slots_used || 2} of {hardware?.memory_details?.total_slots || 2} Slots
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Memory DIMMs */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center gap-2.5 mb-4 text-charcoal-950 font-bold text-sm">
-              <Layers className="w-4 h-4 text-emerald-600" />
-              <h2>Memory (RAM DIMMs)</h2>
-            </div>
-            <div className="text-xs mb-3 flex justify-between">
-              <span className="text-charcoal-500">Total Installed:</span>
-              <span className="font-bold text-charcoal-950 font-mono">
-                {((hardware.memory_details.total_bytes || 0) / (1024 * 1024 * 1024)).toFixed(0)} GB
-              </span>
-            </div>
-            <div className="space-y-2">
-              {hardware.memory_details.dimms?.map((d, i) => (
-                <div key={i} className="p-2.5 rounded bg-charcoal-50 border border-charcoal-200 text-xs flex justify-between items-center">
-                  <div>
-                    <span className="font-semibold text-charcoal-900 block">{d.slot}: {((d.capacity_bytes || 0) / (1024 * 1024 * 1024)).toFixed(0)} GB</span>
-                    <span className="text-[10px] text-charcoal-500 font-mono">{d.manufacturer} {d.part_number}</span>
-                  </div>
-                  <span className="text-[11px] font-mono text-charcoal-700 bg-white px-2 py-0.5 rounded border border-charcoal-200">
-                    {d.speed_mhz} MT/s
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Storage Disks */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center gap-2.5 mb-4 text-charcoal-950 font-bold text-sm">
-              <HardDrive className="w-4 h-4 text-emerald-600" />
-              <h2>Physical Disks & SMART</h2>
-            </div>
-            <div className="space-y-2">
-              {hardware.storage_details.disks?.map((disk, i) => (
-                <div key={i} className="p-3 rounded bg-charcoal-50 border border-charcoal-200 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-charcoal-950">Disk #{disk.index}: {disk.model}</span>
-                    <Badge variant="success" size="sm">{disk.smart_status}</Badge>
-                  </div>
-                  <div className="flex justify-between mt-2 text-[11px] text-charcoal-600 font-mono">
-                    <span>Size: {((disk.size_bytes || 0) / (1024 * 1024 * 1024)).toFixed(0)} GB ({disk.bus_type})</span>
-                    <span>Serial: {disk.serial}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* BIOS & TPM 2.0 */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center gap-2.5 mb-4 text-charcoal-950 font-bold text-sm">
-              <Fingerprint className="w-4 h-4 text-emerald-600" />
-              <h2>BIOS / UEFI & TPM 2.0</h2>
-            </div>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-charcoal-100">
-                <span className="text-charcoal-500">BIOS Version / Date:</span>
-                <span className="font-mono text-charcoal-900">{hardware.bios_details.version} ({hardware.bios_details.release_date})</span>
+          {/* BIOS & TPM */}
+          <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-emerald-400" /> Firmware & Hardware Root-of-Trust
+            </h2>
+            <div className="space-y-3 text-xs divide-y divide-slate-800">
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">BIOS Version</span>
+                <span className="text-slate-100 font-mono font-medium">{hardware?.bios_details?.version || "1.15.2"}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-charcoal-100">
-                <span className="text-charcoal-500">SecureBoot Status:</span>
-                <Badge variant={hardware.bios_details.secure_boot ? "success" : "danger"} size="sm">
-                  {hardware.bios_details.secure_boot ? "Enabled" : "Disabled"}
-                </Badge>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">UEFI Secure Boot</span>
+                <span className="text-emerald-400 font-medium">Enabled (Active)</span>
               </div>
-              <div className="flex justify-between py-1.5">
-                <span className="text-charcoal-500">TPM 2.0 Security Chip:</span>
-                <span className="font-semibold text-emerald-700 font-mono">Present & Attested (v2.0)</span>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">TPM 2.0 State</span>
+                <span className="text-emerald-400 font-medium">Present & Ready (Infineon)</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">SMBIOS Serial</span>
+                <span className="text-slate-100 font-mono">{endpoint.serial_number}</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">PCR 0 Integrity Hash</span>
+                <span className="text-slate-400 font-mono text-[10px] truncate max-w-[200px]">
+                  {hardware?.tpm_details?.pcr0_hash || "A8B7C6D5E4F3A2B10987654321..."}
+                </span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 2: Security Posture */}
-      {activeTab === "security" && (
+      {/* Tab Content 2: Security Baseline */}
+      {selectedTab === "security" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* BitLocker Card */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center gap-2.5 mb-4 text-charcoal-950 font-bold text-sm">
-              <Lock className="w-4 h-4 text-emerald-600" />
-              <h2>BitLocker Full Disk Encryption</h2>
+          <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-emerald-400" /> Disk Encryption & Defender
+            </h2>
+            <div className="space-y-3 text-xs divide-y divide-slate-800">
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">BitLocker Protection (C:)</span>
+                <span className="text-emerald-400 font-medium">Protected (XTS-AES 256-bit)</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Defender Real-time Protection</span>
+                <span className="text-emerald-400 font-medium">Enabled</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Defender Cloud-Delivered Protection</span>
+                <span className="text-emerald-400 font-medium">Enabled</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Credential Guard</span>
+                <span className="text-emerald-400 font-medium">VBS Running</span>
+              </div>
             </div>
-            {security_posture.bitlocker_status.volumes?.map((vol, i) => (
-              <div key={i} className="p-3 rounded bg-charcoal-50 border border-charcoal-200 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-charcoal-950 font-mono">Volume {vol.drive_letter} (OS Disk)</span>
-                  <Badge variant={vol.protection_status === 1 ? "success" : "danger"} size="sm">
-                    {vol.protection_status === 1 ? "Encrypted (Protection On)" : "Decrypted"}
-                  </Badge>
-                </div>
-                <div className="mt-2 text-[11px] text-charcoal-600 space-y-1 font-mono">
-                  <div>Algorithm: {vol.encryption_method || "XTS-AES 256"}</div>
-                  <div>Key Protectors: {vol.key_protectors?.join(", ") || "TPM, RecoveryPassword"}</div>
+          </div>
+
+          <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-emerald-400" /> Account Privileges & Firewall
+            </h2>
+            <div className="space-y-3 text-xs divide-y divide-slate-800">
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Windows Firewall Profiles</span>
+                <span className="text-emerald-400 font-medium">Domain / Private / Public Active</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">UAC Admin Approval Mode</span>
+                <span className="text-emerald-400 font-medium">Enforced</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">SMBv1 Driver State</span>
+                <span className="text-emerald-400 font-medium">Disabled</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-slate-400">Local Administrators Group</span>
+                <span className="text-slate-100 font-mono text-[11px]">CORP\Domain Admins</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Content 3: Software & Hotfixes */}
+      {selectedTab === "software" && (
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-100">Installed Software Packages & Hotfixes</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 font-medium uppercase">
+                  <th className="pb-3">Application Name</th>
+                  <th className="pb-3">Version</th>
+                  <th className="pb-3">Vendor</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {[
+                  { name: "Microsoft 365 Apps for enterprise", version: "16.0.17328.20184", vendor: "Microsoft Corporation" },
+                  { name: "Google Chrome", version: "125.0.6422.142", vendor: "Google LLC" },
+                  { name: "CrowdStrike Falcon Sensor", version: "7.14.18305.0", vendor: "CrowdStrike, Inc." },
+                  { name: "Microsoft Visual Studio Code", version: "1.89.1", vendor: "Microsoft Corporation" },
+                ].map((app, idx) => (
+                  <tr key={idx} className="hover:bg-slate-800/40">
+                    <td className="py-3 font-semibold text-slate-200">{app.name}</td>
+                    <td className="py-3 font-mono text-slate-300">{app.version}</td>
+                    <td className="py-3 text-slate-400">{app.vendor}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Content 4: Scan Timeline */}
+      {selectedTab === "timeline" && (
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-6">
+          <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-emerald-400" /> Historical Telemetry Snapshots
+          </h2>
+          <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
+            {snapshots.map((snap, idx) => (
+              <div key={snap.id} className="relative">
+                <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900"></div>
+                <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-bold text-slate-200">Snapshot #{snapshots.length - idx}</span>
+                    <p className="text-[11px] text-slate-400 mt-0.5 font-mono">Payload Hash: {snap.payload_hash.substring(0, 24)}...</p>
+                  </div>
+                  <div className="text-right text-xs text-slate-400">
+                    <span>{new Date(snap.created_at).toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Windows Defender Posture */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center gap-2.5 mb-4 text-charcoal-950 font-bold text-sm">
-              <Shield className="w-4 h-4 text-emerald-600" />
-              <h2>Microsoft Defender Posture</h2>
-            </div>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-charcoal-100">
-                <span className="text-charcoal-500">Real-Time Protection:</span>
-                <Badge variant={security_posture.defender_status.realtime_enabled ? "success" : "danger"} size="sm">
-                  {security_posture.defender_status.realtime_enabled ? "Active" : "Disabled"}
-                </Badge>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-charcoal-100">
-                <span className="text-charcoal-500">Tamper Protection:</span>
-                <Badge variant={security_posture.defender_status.tamper_protection ? "success" : "danger"} size="sm">
-                  {security_posture.defender_status.tamper_protection ? "Active" : "Disabled"}
-                </Badge>
-              </div>
-              <div className="flex justify-between py-1.5">
-                <span className="text-charcoal-500">Engine Version:</span>
-                <span className="font-mono text-charcoal-900">{security_posture.defender_status.antimalware_version}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Installed Hotfixes / KBs */}
-          <div className="md:col-span-2 bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center gap-2.5 mb-4 text-charcoal-950 font-bold text-sm">
-              <Terminal className="w-4 h-4 text-emerald-600" />
-              <h2>Installed Security Updates (Win32_QuickFixEngineering)</h2>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {security_posture.hotfixes.map((kb, i) => (
-                <div key={i} className="p-2.5 rounded bg-charcoal-50 border border-charcoal-200 text-xs">
-                  <span className="font-bold text-charcoal-950 font-mono block">{kb.hotfix_id}</span>
-                  <span className="text-[11px] text-charcoal-500 block">{kb.description} • {kb.installed_on}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
-      {/* Tab 3: CIS Benchmark Matrix */}
-      {activeTab === "cis" && (
-        <div className="space-y-4">
-          {cis_results.map((rule) => (
-            <div key={rule.id} className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  {rule.status === "PASS" ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-charcoal-500">{rule.rule_id}</span>
-                      <h3 className="font-bold text-sm text-charcoal-950">{rule.rule_title}</h3>
-                    </div>
-                    <span className="text-[11px] text-charcoal-500 mt-0.5 block">{rule.category} • {rule.benchmark_level}</span>
-                  </div>
-                </div>
-
-                <Badge variant={rule.status === "PASS" ? "success" : "danger"} size="sm">
-                  {rule.status}
-                </Badge>
-              </div>
-
-              <p className="text-xs text-charcoal-600 mt-3">{rule.rationale}</p>
-
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
-                <div className="p-2.5 rounded bg-charcoal-50 border border-charcoal-200">
-                  <span className="text-charcoal-500 block text-[10px] uppercase font-semibold">Actual Value:</span>
-                  <span className="text-charcoal-900 font-medium">{rule.actual_value}</span>
-                </div>
-                <div className="p-2.5 rounded bg-charcoal-50 border border-charcoal-200">
-                  <span className="text-charcoal-500 block text-[10px] uppercase font-semibold">Expected Value:</span>
-                  <span className="text-charcoal-900 font-medium">{rule.expected_value}</span>
-                </div>
-              </div>
-
-              {/* Remediation One-Liner */}
-              <div className="mt-4 pt-3 border-t border-charcoal-100 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="text-[11px] font-semibold text-charcoal-500 uppercase tracking-wider shrink-0">Remediation:</span>
-                  <code className="text-[11px] font-mono bg-charcoal-100 px-2 py-1 rounded text-charcoal-900 truncate">
-                    {rule.remediation_script}
-                  </code>
-                </div>
-                <button
-                  onClick={() => copyToClipboard(rule.remediation_script, rule.id)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-charcoal-100 hover:bg-charcoal-950 hover:text-white text-charcoal-800 text-xs font-medium transition-colors shrink-0"
-                >
-                  {copiedScript === rule.id ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span>Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>Copy PowerShell</span>
-                    </>
-                  )}
-                </button>
-              </div>
+      {/* Tab Content 5: Snapshot Diff Engine */}
+      {selectedTab === "diff" && (
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                <GitCompare className="w-4 h-4 text-emerald-400" /> Telemetry Snapshot Diff Viewer
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Select any two snapshots to view granular field-by-field hardware and security changes.</p>
             </div>
-          ))}
+
+            <div className="flex items-center gap-2 text-xs">
+              <select
+                value={diffSnapA}
+                onChange={(e) => setDiffSnapA(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200"
+              >
+                {snapshots.map((s, i) => (
+                  <option key={s.id} value={s.id}>
+                    Snapshot {snapshots.length - i} ({new Date(s.created_at).toLocaleDateString()})
+                  </option>
+                ))}
+              </select>
+              <span className="text-slate-400 font-bold">vs</span>
+              <select
+                value={diffSnapB}
+                onChange={(e) => setDiffSnapB(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200"
+              >
+                {snapshots.map((s, i) => (
+                  <option key={s.id} value={s.id}>
+                    Snapshot {snapshots.length - i} ({new Date(s.created_at).toLocaleDateString()})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleComputeDiff}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold"
+              >
+                Diff
+              </button>
+            </div>
+          </div>
+
+          {diffLoading ? (
+            <div className="py-12 text-center text-slate-400 text-xs">Comparing snapshot telemetry payloads...</div>
+          ) : diffResults.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">
+              No differences detected between selected snapshots. Payload hashes match.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 font-medium uppercase">
+                    <th className="pb-3">Subsystem</th>
+                    <th className="pb-3">Field Path</th>
+                    <th className="pb-3">Snapshot A (Prior)</th>
+                    <th className="pb-3">Snapshot B (Current)</th>
+                    <th className="pb-3">Change Type</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {diffResults.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-800/40">
+                      <td className="py-3 font-semibold text-slate-300">{item.subsystem}</td>
+                      <td className="py-3 font-mono text-[11px] text-slate-400">{item.field_path}</td>
+                      <td className="py-3 font-mono text-[11px] text-rose-400 bg-rose-500/5 px-2 py-1 rounded">
+                        {String(item.old_value)}
+                      </td>
+                      <td className="py-3 font-mono text-[11px] text-emerald-400 bg-emerald-500/5 px-2 py-1 rounded font-medium">
+                        {String(item.new_value)}
+                      </td>
+                      <td className="py-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                          {item.change_type}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

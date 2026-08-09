@@ -3,269 +3,386 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  Shield,
   Monitor,
-  Lock,
-  Cpu,
   CheckCircle2,
-  Network,
-  Radar,
-  ArrowUpRight,
   AlertTriangle,
+  Flame,
   Server,
-  Laptop,
-  Layers,
+  Activity,
+  ArrowRight,
+  TrendingUp,
+  Clock,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
-import { StatCard } from "@/components/ui/StatCard";
-import { Badge } from "@/components/ui/Badge";
-import { api } from "@/lib/api";
-import { FleetMetrics, Endpoint, ScanJob } from "@/lib/types";
+import { getFleetMetrics, getDriftEvents, getEndpoints } from "@/lib/api";
+import { FleetMetrics, DriftEvent, Endpoint } from "@/lib/types";
 
-export default function DashboardPage() {
+export default function FleetOverviewPage() {
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
+  const [driftEvents, setDriftEvents] = useState<DriftEvent[]>([]);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
-  const [scans, setScans] = useState<ScanJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [m, d, e] = await Promise.all([
+        getFleetMetrics(),
+        getDriftEvents(),
+        getEndpoints(),
+      ]);
+      setMetrics(m);
+      setDriftEvents(d);
+      setEndpoints(e);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load fleet telemetry.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [m, e, s] = await Promise.all([
-          api.getMetrics(),
-          api.getEndpoints(),
-          api.getScans(),
-        ]);
-        setMetrics(m);
-        setEndpoints(e);
-        setScans(s);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
   }, []);
 
+  if (loading) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto space-y-6" aria-busy="true" aria-live="polite">
+        <div className="h-8 w-64 bg-slate-800 animate-pulse rounded"></div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-28 bg-slate-800/60 rounded-xl animate-pulse"></div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 h-72 bg-slate-800/60 rounded-xl animate-pulse"></div>
+          <div className="h-72 bg-slate-800/60 rounded-xl animate-pulse"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center py-20" role="alert">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center">
+          <AlertCircle className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-100 mb-2">Error Loading Fleet Telemetry</h2>
+        <p className="text-sm text-slate-400 mb-6">{error}</p>
+        <button
+          onClick={loadData}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" /> Retry
+        </button>
+      </div>
+    );
+  }
+
+  const bands = metrics?.compliance_bands || {
+    band_90_100: 0,
+    band_75_89: 0,
+    band_50_74: 0,
+    band_under_50: 0,
+  };
+  const totalInBands = Object.values(bands).reduce((a, b) => a + b, 0) || 1;
+
   return (
-    <div className="space-y-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-8">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-charcoal-950">
+          <h1 className="text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-2.5">
+            <Activity className="w-6 h-6 text-emerald-400" />
             Executive Fleet Overview
           </h1>
-          <p className="text-sm text-charcoal-600 mt-1">
-            Agentless audit, hardware inventory, and CIS benchmark status across Windows 11 & Windows Server.
+          <p className="text-sm text-slate-400 mt-1">
+            Real-time compliance posture, vulnerability exposure, gateway mesh health, and configuration drift.
           </p>
         </div>
-
         <div className="flex items-center gap-3">
+          <button
+            onClick={loadData}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+            aria-label="Refresh telemetry data"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </button>
           <Link
             href="/scans"
-            className="flex items-center gap-2 px-4 py-2 bg-charcoal-950 hover:bg-charcoal-800 text-white text-sm font-medium rounded-lg shadow-sm transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors"
           >
-            <Radar className="w-4 h-4 text-emerald-400" />
-            <span>Launch Discovery Scan</span>
+            Launch Agentless Scan <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       </div>
 
-      {/* KPI Stats Grid */}
+      {/* Top 4 KPI Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Audited Endpoints"
-          value={metrics ? metrics.total_endpoints : "24"}
-          subtitle={`${metrics ? metrics.online_endpoints : "22"} Online & Responsive`}
-          change="100% Agentless"
-          changeType="positive"
-          icon={Monitor}
-          accentColor="charcoal"
-        />
+        {/* Compliance Score */}
+        <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm relative overflow-hidden group hover:border-emerald-500/30 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-xs font-medium text-slate-400">Average Compliance</span>
+              <div className="text-2xl font-bold text-white mt-1">
+                {metrics?.average_compliance.toFixed(1)}%
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>CIS Benchmark v2.0</span>
+          </div>
+        </div>
 
-        <StatCard
-          title="BitLocker Encryption"
-          value={metrics ? `${metrics.bitlocker_rate}%` : "95.8%"}
-          subtitle="OS Volumes (XTS-AES 256)"
-          change="+2.4% this week"
-          changeType="positive"
-          icon={Lock}
-          accentColor="emerald"
-        />
+        {/* Open Critical Vulns & KEV */}
+        <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm relative overflow-hidden group hover:border-rose-500/30 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-xs font-medium text-slate-400">Critical Vulnerabilities</span>
+              <div className="text-2xl font-bold text-rose-400 mt-1">
+                {metrics?.open_critical_vulns || 0}
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center">
+              <Flame className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-rose-400 font-medium">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <span>{metrics?.open_kev_count || 0} CISA KEV Exploited</span>
+          </div>
+        </div>
 
-        <StatCard
-          title="TPM 2.0 Attestation"
-          value={metrics ? `${metrics.tpm_rate}%` : "100.0%"}
-          subtitle="Hardware Root of Trust Active"
-          change="Compliant"
-          changeType="positive"
-          icon={Cpu}
-          accentColor="indigo"
-        />
+        {/* Total Hosts */}
+        <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm relative overflow-hidden group hover:border-sky-500/30 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-xs font-medium text-slate-400">Scanned Endpoints</span>
+              <div className="text-2xl font-bold text-white mt-1">
+                {metrics?.online_endpoints || 0} / {metrics?.total_endpoints || 0}
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center">
+              <Monitor className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-slate-400">
+            <span>100% Agentless via WinRM / CIM</span>
+          </div>
+        </div>
 
-        <StatCard
-          title="Avg CIS Compliance"
-          value={metrics ? `${metrics.average_compliance.toFixed(1)}%` : "94.2%"}
-          subtitle="CIS Microsoft Windows Baseline"
-          change="Level 1 & 2"
-          changeType="neutral"
-          icon={CheckCircle2}
-          accentColor="emerald"
-        />
+        {/* Gateways Health */}
+        <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm relative overflow-hidden group hover:border-violet-500/30 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-xs font-medium text-slate-400">Collector Gateways</span>
+              <div className="text-2xl font-bold text-emerald-400 mt-1">
+                {metrics?.active_gateways || 0} Healthy
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center">
+              <Server className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-slate-400">
+            <span>mTLS 1.3 Certified Subnets</span>
+          </div>
+        </div>
       </div>
 
-      {/* Main Grid: Fleet Posture & Recent Scans */}
+      {/* Row 2: Compliance Score Bands & Security Baseline */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Fleet Endpoints Quick Inspect */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-charcoal-200 p-6 card-border">
-          <div className="flex items-center justify-between mb-5">
+        {/* Compliance Score Distribution */}
+        <div className="lg:col-span-2 p-6 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-base font-bold text-charcoal-950">Active Fleet Endpoints</h2>
-              <p className="text-xs text-charcoal-500 mt-0.5">
-                Scanned via WinRM / CIM over HTTPS (Port 5986)
-              </p>
+              <h2 className="text-base font-semibold text-slate-100">Compliance Distribution Bands</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Host count grouped by CIS benchmark compliance score range</p>
             </div>
             <Link
-              href="/endpoints"
-              className="text-xs font-semibold text-charcoal-900 hover:text-emerald-600 flex items-center gap-1 transition-colors"
+              href="/compliance"
+              className="text-xs font-medium text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
             >
-              <span>View All Fleet</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
+              View CIS Rules <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
 
+          <div className="space-y-4">
+            {/* Band 90-100% */}
+            <div>
+              <div className="flex justify-between text-xs font-medium mb-1.5">
+                <span className="text-slate-300 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                  90% - 100% (High Compliance)
+                </span>
+                <span className="text-slate-100 font-bold">{bands.band_90_100} hosts ({Math.round((bands.band_90_100 / totalInBands) * 100)}%)</span>
+              </div>
+              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                  style={{ width: `${(bands.band_90_100 / totalInBands) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Band 75-89% */}
+            <div>
+              <div className="flex justify-between text-xs font-medium mb-1.5">
+                <span className="text-slate-300 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+                  75% - 89% (Moderate Compliance)
+                </span>
+                <span className="text-slate-100 font-bold">{bands.band_75_89} hosts ({Math.round((bands.band_75_89 / totalInBands) * 100)}%)</span>
+              </div>
+              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-sky-500 rounded-full transition-all duration-500"
+                  style={{ width: `${(bands.band_75_89 / totalInBands) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Band 50-74% */}
+            <div>
+              <div className="flex justify-between text-xs font-medium mb-1.5">
+                <span className="text-slate-300 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                  50% - 74% (Needs Remediation)
+                </span>
+                <span className="text-slate-100 font-bold">{bands.band_50_74} hosts ({Math.round((bands.band_50_74 / totalInBands) * 100)}%)</span>
+              </div>
+              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                  style={{ width: `${(bands.band_50_74 / totalInBands) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Band Under 50% */}
+            <div>
+              <div className="flex justify-between text-xs font-medium mb-1.5">
+                <span className="text-slate-300 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-400"></span>
+                  &lt; 50% (Critical Risk)
+                </span>
+                <span className="text-slate-100 font-bold">{bands.band_under_50} hosts ({Math.round((bands.band_under_50 / totalInBands) * 100)}%)</span>
+              </div>
+              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-rose-500 rounded-full transition-all duration-500"
+                  style={{ width: `${(bands.band_under_50 / totalInBands) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Security Baseline Rates */}
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm space-y-4">
+          <h2 className="text-base font-semibold text-slate-100">Security Baseline Status</h2>
+          <div className="space-y-3.5 text-xs">
+            <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/40 border border-slate-800">
+              <span className="text-slate-300">BitLocker Volume Encryption</span>
+              <span className="font-semibold text-emerald-400">{metrics?.bitlocker_rate}%</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/40 border border-slate-800">
+              <span className="text-slate-300">TPM 2.0 Hardware Active</span>
+              <span className="font-semibold text-emerald-400">{metrics?.tpm_rate}%</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/40 border border-slate-800">
+              <span className="text-slate-300">Defender Cloud & Real-time</span>
+              <span className="font-semibold text-emerald-400">{metrics?.defender_rate}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Recent Configuration Drift Events Feed */}
+      <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+              Recent Configuration Drift Events
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">Field-level state changes detected across consecutive telemetry snapshots</p>
+          </div>
+          <Link
+            href="/endpoints"
+            className="text-xs font-medium text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
+          >
+            All Endpoints <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {driftEvents.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 text-sm">
+            No configuration drift events recorded. Fleet state is fully synchronized.
+          </div>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-charcoal-200 text-charcoal-500 uppercase tracking-wider font-semibold">
-                  <th className="pb-3">Hostname / Domain</th>
-                  <th className="pb-3">IP & Protocol</th>
-                  <th className="pb-3">OS Edition</th>
-                  <th className="pb-3">Chassis</th>
-                  <th className="pb-3 text-right">CIS Score</th>
+                <tr className="border-b border-slate-800 text-slate-400 font-medium uppercase tracking-wider">
+                  <th className="pb-3">Severity</th>
+                  <th className="pb-3">Host</th>
+                  <th className="pb-3">Subsystem</th>
+                  <th className="pb-3">Property Changed</th>
+                  <th className="pb-3">Prior State</th>
+                  <th className="pb-3">Current State</th>
+                  <th className="pb-3">Detected</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-charcoal-100">
-                {endpoints.slice(0, 4).map((ep) => (
-                  <tr key={ep.id} className="hover:bg-charcoal-50 transition-colors group">
-                    <td className="py-3.5">
-                      <Link href={`/endpoints/${ep.id}`} className="block">
-                        <span className="font-semibold text-charcoal-950 group-hover:text-emerald-700 block">
-                          {ep.hostname}
+              <tbody className="divide-y divide-slate-800/60">
+                {driftEvents.map((event) => {
+                  const severityBadge =
+                    event.severity === "CRITICAL"
+                      ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                      : event.severity === "WARNING"
+                      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                      : "bg-sky-500/10 text-sky-400 border-sky-500/20";
+
+                  return (
+                    <tr key={event.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${severityBadge}`}>
+                          {event.severity}
                         </span>
-                        <span className="text-[11px] text-charcoal-500 font-mono block">{ep.domain}</span>
-                      </Link>
-                    </td>
-                    <td className="py-3.5">
-                      <span className="font-mono text-charcoal-900 font-medium block">{ep.ip_address}</span>
-                      <span className="text-[10px] text-charcoal-500 font-mono block">WinRM HTTPS (5986)</span>
-                    </td>
-                    <td className="py-3.5">
-                      <span className="text-charcoal-800 font-medium block truncate max-w-[180px]">
-                        {ep.os_name}
-                      </span>
-                      <span className="text-[10px] text-charcoal-500 font-mono block">Build {ep.os_build}</span>
-                    </td>
-                    <td className="py-3.5">
-                      <div className="flex items-center gap-1.5 text-charcoal-700">
-                        {ep.chassis_type === "Laptop" ? (
-                          <Laptop className="w-3.5 h-3.5 text-charcoal-500" />
-                        ) : (
-                          <Server className="w-3.5 h-3.5 text-charcoal-500" />
-                        )}
-                        <span>{ep.chassis_type}</span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 text-right">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono border ${
-                          ep.compliance_score >= 90
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}
-                      >
-                        {ep.compliance_score.toFixed(1)}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3 font-semibold text-slate-200">
+                        <Link href={`/endpoints/${event.host_id}`} className="hover:text-emerald-400 underline decoration-slate-700">
+                          {event.hostname}
+                        </Link>
+                      </td>
+                      <td className="py-3 text-slate-300">{event.subsystem}</td>
+                      <td className="py-3 font-mono text-[11px] text-slate-300">{event.property_name}</td>
+                      <td className="py-3 font-mono text-[11px] text-slate-400 line-through truncate max-w-[150px]">
+                        {event.old_value}
+                      </td>
+                      <td className="py-3 font-mono text-[11px] text-emerald-400 font-medium truncate max-w-[150px]">
+                        {event.new_value}
+                      </td>
+                      <td className="py-3 text-slate-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {new Date(event.detected_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Right 1 Col: Collector Mesh & Recent Scans */}
-        <div className="space-y-6">
-          {/* Subnet Collector Mesh Card */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-charcoal-950">Subnet Collector Mesh</h2>
-              <Badge variant="success" size="sm">
-                2 Active Gateways
-              </Badge>
-            </div>
-            <p className="text-xs text-charcoal-500 mb-4">
-              Per-subnet Go daemons authenticating over mTLS 1.3 tunnels.
-            </p>
-
-            <div className="space-y-2.5">
-              <div className="p-2.5 rounded-lg bg-charcoal-50 border border-charcoal-200 flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-semibold text-charcoal-900 block">Subnet 10.100.1.0/24</span>
-                  <span className="text-[10px] text-charcoal-500 font-mono">Corporate HQ (Subnet A)</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] font-mono text-emerald-700 font-semibold block">4ms</span>
-                  <span className="text-[10px] text-emerald-600 block">Healthy</span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-charcoal-50 border border-charcoal-200 flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-semibold text-charcoal-900 block">Subnet 10.100.2.0/24</span>
-                  <span className="text-[10px] text-charcoal-500 font-mono">Datacenter East (Subnet B)</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] font-mono text-emerald-700 font-semibold block">2ms</span>
-                  <span className="text-[10px] text-emerald-600 block">Healthy</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-charcoal-100 flex justify-between items-center text-xs">
-              <Link href="/gateways" className="font-semibold text-charcoal-900 hover:text-emerald-700 flex items-center gap-1">
-                <span>Manage Gateways</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </div>
-
-          {/* Recent Agentless Scans */}
-          <div className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-charcoal-950">Recent Scan Jobs</h2>
-              <Link href="/scans" className="text-xs font-semibold text-charcoal-900 hover:text-emerald-700">
-                All Logs
-              </Link>
-            </div>
-
-            <div className="space-y-3">
-              {scans.slice(0, 2).map((s) => (
-                <div key={s.id} className="p-3 rounded-lg border border-charcoal-200 bg-charcoal-50/50">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-xs text-charcoal-950 truncate max-w-[170px]">
-                      {s.name}
-                    </span>
-                    <Badge variant={s.status === "completed" ? "success" : "info"} size="sm">
-                      {s.status}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-charcoal-500 font-mono">
-                    <span>Target: {s.target_cidr}</span>
-                    <span>{s.scanned_hosts}/{s.total_hosts} hosts</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

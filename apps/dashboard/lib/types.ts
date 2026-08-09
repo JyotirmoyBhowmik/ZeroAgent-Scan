@@ -13,6 +13,8 @@ export interface Endpoint {
   status: "online" | "offline" | "scanning" | "error";
   agentless_protocol: string;
   compliance_score: number;
+  open_vulns_count?: number;
+  critical_vulns_count?: number;
   last_scanned_at?: string;
   created_at: string;
   updated_at: string;
@@ -25,6 +27,9 @@ export interface CPUDetails {
   cores?: number;
   logical_processors?: number;
   max_clock_mhz?: number;
+  virtualization_firmware?: boolean;
+  vbs_status?: string;
+  hvci_status?: string;
 }
 
 export interface MemoryDIMM {
@@ -34,6 +39,7 @@ export interface MemoryDIMM {
   manufacturer?: string;
   part_number?: string;
   serial_number?: string;
+  form_factor?: string;
 }
 
 export interface MemoryDetails {
@@ -51,6 +57,7 @@ export interface StorageDisk {
   partition_count?: number;
   smart_status?: string;
   serial?: string;
+  media_type?: string;
 }
 
 export interface NetworkAdapter {
@@ -62,6 +69,28 @@ export interface NetworkAdapter {
   dhcp_enabled?: boolean;
   dns_servers?: string[];
   link_speed_mbps?: number;
+  status?: string;
+}
+
+export interface BIOSDetails {
+  vendor?: string;
+  version?: string;
+  release_date?: string;
+  smbios_version?: string;
+  smbios_guid?: string;
+  manufacturer?: string;
+  secure_boot?: boolean;
+  uefi_mode?: boolean;
+}
+
+export interface TPMDetails {
+  present?: boolean;
+  spec_version?: string;
+  manufacturer_id?: string;
+  enabled?: boolean;
+  activated?: boolean;
+  pcr0_hash?: string;
+  pcr7_hash?: string;
 }
 
 export interface HardwareInventory {
@@ -71,17 +100,51 @@ export interface HardwareInventory {
   memory_details: MemoryDetails;
   storage_details: { disks?: StorageDisk[] };
   network_details: { adapters?: NetworkAdapter[] };
-  bios_details: { version?: string; release_date?: string; smbios_version?: string; manufacturer?: string; secure_boot?: boolean };
-  tpm_details: { present?: boolean; spec_version?: string; manufacturer_id?: string; enabled?: boolean; activated?: boolean };
+  bios_details: BIOSDetails;
+  tpm_details: TPMDetails;
+}
+
+export interface SoftwarePackage {
+  name: string;
+  version: string;
+  vendor?: string;
+  architecture?: string;
+  install_date?: string;
+  cpe?: string;
 }
 
 export interface SecurityPosture {
   id?: string;
   endpoint_id: string;
-  bitlocker_status: { volumes?: Array<{ drive_letter?: string; protection_status?: number; encryption_method?: string; lock_status?: number; key_protectors?: string[] }> };
-  defender_status: { realtime_enabled?: boolean; cloud_protection?: boolean; tamper_protection?: boolean; antimalware_version?: string; signatures_updated?: string };
-  firewall_status: { domain_profile?: boolean; private_profile?: boolean; public_profile?: boolean };
-  uac_status: { admin_approval_mode?: boolean };
+  bitlocker_status: {
+    volumes?: Array<{
+      drive_letter?: string;
+      protection_status?: number;
+      encryption_method?: string;
+      lock_status?: number;
+      key_protectors?: string[];
+    }>;
+  };
+  defender_status: {
+    realtime_enabled?: boolean;
+    cloud_protection?: boolean;
+    tamper_protection?: boolean;
+    antimalware_version?: string;
+    signatures_updated?: string;
+    pua_protection?: boolean;
+  };
+  firewall_status: {
+    domain_profile?: boolean;
+    private_profile?: boolean;
+    public_profile?: boolean;
+  };
+  uac_status: {
+    admin_approval_mode?: boolean;
+  };
+  credential_guard_enabled?: boolean;
+  lsa_protection_enabled?: boolean;
+  smbv1_disabled?: boolean;
+  rdp_nla_required?: boolean;
   hotfixes: Array<{ hotfix_id?: string; description?: string; installed_on?: string }>;
   local_admins: string[];
 }
@@ -99,6 +162,7 @@ export interface CISResult {
   expected_value: string;
   rationale: string;
   remediation_script: string;
+  cis_control_citation: string;
   evaluated_at: string;
 }
 
@@ -107,6 +171,90 @@ export interface EndpointDetail {
   hardware: HardwareInventory;
   security_posture: SecurityPosture;
   cis_results: CISResult[];
+}
+
+export interface HostSnapshot {
+  id: string;
+  endpoint_id: string;
+  hostname: string;
+  scan_job_id: string;
+  payload_hash: string;
+  created_at: string;
+  hardware: HardwareInventory;
+  software: SoftwarePackage[];
+  security_posture: SecurityPosture;
+  cis_results: CISResult[];
+}
+
+export interface SnapshotDiffItem {
+  subsystem: string;
+  field_path: string;
+  old_value: any;
+  new_value: any;
+  severity: "CRITICAL" | "WARNING" | "INFO";
+  change_type: "MODIFIED" | "ADDED" | "REMOVED";
+}
+
+export interface VulnerabilityFinding {
+  id: string;
+  tenant_id: string;
+  endpoint_id: string;
+  hostname: string;
+  cve_id: string;
+  cpe_string: string;
+  cvss_score: number;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  is_kev: boolean;
+  kev_due_date?: string;
+  short_description: string;
+  status: "OPEN" | "MITIGATED" | "ACCEPTED_RISK" | "FALSE_POSITIVE";
+  justification_note?: string;
+  remediation_guidance: string;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface DriftEvent {
+  id: string;
+  tenant_id: string;
+  host_id: string;
+  hostname: string;
+  subsystem: string;
+  property_name: string;
+  old_value: string;
+  new_value: string;
+  severity: "CRITICAL" | "WARNING" | "INFO";
+  acknowledged: boolean;
+  detected_at: string;
+}
+
+export interface NetworkSubnet {
+  id: string;
+  subnet_cidr: string;
+  name: string;
+  location: string;
+  assigned_gateway_code: string;
+  gateway_name: string;
+  gateway_status: "healthy" | "degraded" | "offline";
+  gateway_latency_ms: number;
+  host_count: number;
+  online_count: number;
+  compliant_count: number;
+  last_scan_at: string;
+}
+
+export interface ReportConfig {
+  id: string;
+  title: string;
+  report_type: "EXECUTIVE_SUMMARY" | "COMPLIANCE_AUDIT" | "VULNERABILITY_POSTURE";
+  format: "PDF" | "CSV";
+  schedule: "DAILY" | "WEEKLY" | "MONTHLY" | "ON_DEMAND";
+  recipients: string[];
+  shareable_token?: string;
+  shareable_url?: string;
+  expires_at?: string;
+  created_at: string;
+  last_generated_at?: string;
 }
 
 export interface ScanJob {
@@ -175,4 +323,12 @@ export interface FleetMetrics {
   active_gateways: number;
   total_gateways: number;
   critical_issues_count: number;
+  open_critical_vulns: number;
+  open_kev_count: number;
+  compliance_bands: {
+    band_90_100: number;
+    band_75_89: number;
+    band_50_74: number;
+    band_under_50: number;
+  };
 }

@@ -155,3 +155,14 @@ type FleetMetrics struct {
 	TotalGateways       int     `json:"total_gateways"`
 	CriticalIssuesCount int     `json:"critical_issues_count"`
 }
+
+type HostSnapshotEntry struct {
+	ID          string              `json:"id"`
+	TenantID    string              `json:"tenant_id"`
+	HostID      string              `json:"host_id"`
+	Hostname    string              `json:"hostname"`
+	ScanJobID   string              `json:"scan_job_id,omitempty"`
+	PayloadHash string              `json:"payload_hash"`
+	Payload     HostSnapshotPayload `json:"payload"`
+	CreatedAt   time.Time           `json:"created_at"`
+}
