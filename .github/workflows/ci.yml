@@ -1,0 +1,157 @@
+name: EndpointGuard CI & Security Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Security Analysis (Fails build on High/Critical findings)
+  # ---------------------------------------------------------------------------
+  security-scan:
+    name: Security Scanners (gosec, bandit, npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up pnpm & Node.js
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      # Go Security Scan (gosec)
+      - name: Run Gosec Security Scanner (Go API & Gateway)
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -severity high -confidence high -exclude-dir=tests ./apps/...
+
+      # Python Security Scan (bandit)
+      - name: Run Bandit Security Scanner (Scan Engine Python)
+        run: |
+          pip install bandit
+          bandit -r packages/scan-engine/python -lll --exclude tests
+
+      # NPM Security Audit (Next.js Dashboard)
+      - name: Run PNPM Security Audit (Dashboard)
+        run: |
+          cd apps/dashboard
+          pnpm audit --audit-level=high
+
+  # ---------------------------------------------------------------------------
+  # 2. Go API & Gateway Build & Unit Tests
+  # ---------------------------------------------------------------------------
+  go-services:
+    name: Go API & Gateway (Lint, Test, Race Detector)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Verify Go API dependencies & tests
+        run: |
+          cd apps/api
+          go mod download
+          go vet ./...
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Verify Gateway dependencies & tests
+        run: |
+          cd apps/gateway
+          go mod download
+          go vet ./...
+          go test -v -race -coverprofile=coverage.out ./...
+
+  # ---------------------------------------------------------------------------
+  # 3. Scan Engine Validation (Python & PowerShell)
+  # ---------------------------------------------------------------------------
+  scan-engine:
+    name: Scan Engine (Python & PowerShell Tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Run Python Scan Engine Tests
+        run: |
+          cd packages/scan-engine/python
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+          pytest --cov=. -v tests/
+
+      - name: Validate PowerShell Scripts Syntax
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem -Path "packages/scan-engine/powershell/*.ps1"
+          foreach ($script in $scripts) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              Write-Error "PowerShell parse error in $($script.Name)"
+              exit 1
+            }
+            Write-Host "Validated $($script.Name)"
+          }
+
+  # ---------------------------------------------------------------------------
+  # 4. Next.js 14 Dashboard Build & Typecheck
+  # ---------------------------------------------------------------------------
+  dashboard:
+    name: Next.js Dashboard (Lint, Typecheck & Build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm & Node.js
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: |
+          cd apps/dashboard
+          pnpm install --frozen-lockfile=false
+
+      - name: Typecheck and Build Next.js app
+        run: |
+          cd apps/dashboard
+          pnpm build

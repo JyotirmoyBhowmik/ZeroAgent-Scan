@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 15+ with JSONB and Row-Level Security
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: endpointguard-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: endpointguard
+      POSTGRES_USER: endpointguard_app
+      POSTGRES_PASSWORD: endpointguard_secure_dev_password_change_in_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/db/migrations/000001_init_schema.up.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U endpointguard_app -d endpointguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - endpointguard-net
+
+  # ---------------------------------------------------------------------------
+  # EndpointGuard Control Plane API (Go with go-chi/chi/v5)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: endpointguard-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      ENVIRONMENT: "development"
+      DATABASE_URL: "postgres://endpointguard_app:endpointguard_secure_dev_password_change_in_prod@postgres:5432/endpointguard?sslmode=disable"
+      VAULT_MASTER_KEY_HEX: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      LOG_LEVEL: "info"
+      ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - endpointguard-net
+
+  # ---------------------------------------------------------------------------
+  # EndpointGuard Dashboard (Next.js 14 App Router, White & Charcoal Theme)
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: endpointguard-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: "production"
+      NEXT_PUBLIC_API_URL: "http://localhost:8080"
+    depends_on:
+      - api
+    networks:
+      - endpointguard-net
+
+  # ---------------------------------------------------------------------------
+  # Subnet Collector Gateway Daemon (Go Binary, on-prem per subnet)
+  # ---------------------------------------------------------------------------
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    container_name: endpointguard-gateway-primary
+    restart: unless-stopped
+    environment:
+      GATEWAY_ID: "gw-subnet-10-100-1-0"
+      SUBNET_CIDR: "10.100.1.0/24"
+      CONTROL_PLANE_URL: "http://api:8080"
+      HEARTBEAT_INTERVAL_SEC: "10"
+      LOG_LEVEL: "info"
+    depends_on:
+      - api
+    networks:
+      - endpointguard-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  endpointguard-net:
+    driver: bridge

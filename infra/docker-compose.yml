@@ -1,0 +1,29 @@
+# Local development infrastructure
+# Use the root docker-compose.yml or run from this directory:
+# docker compose -f infra/docker-compose.yml up
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: endpointguard-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: endpointguard
+      POSTGRES_USER: endpointguard_app
+      POSTGRES_PASSWORD: endpointguard_secure_dev_password_change_in_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_infra:/var/lib/postgresql/data
+      - ../packages/db/migrations/000001_init_schema.up.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U endpointguard_app -d endpointguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata_infra:
+    driver: local
