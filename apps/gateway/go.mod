@@ -1,3 +1,7 @@
-module github.com/endpointguard/endpointguard/apps/gateway
+module github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/gateway
 
 go 1.22
+
+require golang.org/x/crypto v0.23.0
+
+require golang.org/x/sys v0.20.0 // indirect

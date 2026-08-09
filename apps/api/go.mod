@@ -1,4 +1,4 @@
-module github.com/endpointguard/endpointguard/apps/api
+module github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api
 
 go 1.22
 

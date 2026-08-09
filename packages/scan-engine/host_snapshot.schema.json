@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EndpointGuard Host Snapshot Payload",
+  "type": "object",
+  "required": [
+    "audit_metadata",
+    "system_identity",
+    "firmware_bios",
+    "processor",
+    "memory",
+    "storage",
+    "tpm",
+    "network",
+    "peripherals",
+    "software",
+    "security_baseline",
+    "user_access"
+  ],
+  "properties": {
+    "audit_metadata": {
+      "type": "object",
+      "required": ["engine_version", "timestamp_utc", "scan_protocol", "target_host"],
+      "properties": {
+        "engine_version": { "type": "string" },
+        "timestamp_utc": { "type": "string", "format": "date-time" },
+        "scan_protocol": { "type": "string" },
+        "target_host": { "type": "string" }
+      }
+    },
+    "system_identity": {
+      "type": "object",
+      "required": ["hostname", "manufacturer", "model", "os_name", "os_version", "os_build"],
+      "properties": {
+        "hostname": { "type": "string" },
+        "domain": { "type": ["string", "null"] },
+        "manufacturer": { "type": "string" },
+        "model": { "type": "string" },
+        "system_type": { "type": ["string", "null"] },
+        "chassis_type": { "type": "string" },
+        "os_name": { "type": "string" },
+        "os_version": { "type": "string" },
+        "os_build": { "type": "string" },
+        "os_architecture": { "type": ["string", "null"] },
+        "serial_number": { "type": ["string", "null"] },
+        "install_date": { "type": ["string", "null"] },
+        "last_boot_time": { "type": ["string", "null"] }
+      }
+    },
+    "firmware_bios": {
+      "type": "object",
+      "required": ["vendor", "version", "secure_boot_enabled", "uefi_mode"],
+      "properties": {
+        "motherboard_serial": { "type": ["string", "null"] },
+        "motherboard_manufacturer": { "type": ["string", "null"] },
+        "motherboard_product": { "type": ["string", "null"] },
+        "vendor": { "type": "string" },
+        "version": { "type": "string" },
+        "release_date": { "type": ["string", "null"] },
+        "smbios_version": { "type": ["string", "null"] },
+        "smbios_guid": { "type": ["string", "null"] },
+        "secure_boot_enabled": { "type": "boolean" },
+        "uefi_mode": { "type": "boolean" }
+      }
+    },
+    "processor": {
+      "type": "object",
+      "required": ["models", "socket_count", "total_cores", "total_threads"],
+      "properties": {
+        "models": { "type": "array", "items": { "type": "string" } },
+        "socket_count": { "type": "integer", "minimum": 1 },
+        "total_cores": { "type": "integer", "minimum": 1 },
+        "total_threads": { "type": "integer", "minimum": 1 },
+        "virtualization_firmware_enabled": { "type": ["boolean", "null"] },
+        "vbs_status": { "type": ["string", "null"] },
+        "hvci_status": { "type": ["string", "null"] },
+        "processors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "device_id": { "type": "string" },
+              "name": { "type": "string" },
+              "manufacturer": { "type": "string" },
+              "cores": { "type": "integer" },
+              "threads": { "type": "integer" },
+              "max_clock_mhz": { "type": "integer" },
+              "architecture": { "type": "string" },
+              "socket": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "required": ["total_capacity_bytes", "slots_used", "total_slots", "dimms"],
+      "properties": {
+        "total_capacity_bytes": { "type": "integer", "minimum": 0 },
+        "slots_used": { "type": "integer", "minimum": 0 },
+        "total_slots": { "type": "integer", "minimum": 0 },
+        "dimms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": { "type": "string" },
+              "capacity_bytes": { "type": "integer" },
+              "speed_mhz": { "type": ["integer", "null"] },
+              "manufacturer": { "type": ["string", "null"] },
+              "part_number": { "type": ["string", "null"] },
+              "serial_number": { "type": ["string", "null"] },
+              "form_factor": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "required": ["disks", "disk_count"],
+      "properties": {
+        "disk_count": { "type": "integer", "minimum": 0 },
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": { "type": "integer" },
+              "model": { "type": "string" },
+              "bus_type": { "type": "string" },
+              "size_bytes": { "type": "integer" },
+              "partitions": { "type": "integer" },
+              "smart_status": { "type": "string" },
+              "serial_number": { "type": ["string", "null"] },
+              "media_type": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "partitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "disk_index": { "type": "integer" },
+              "size_bytes": { "type": "integer" },
+              "bootable": { "type": "boolean" },
+              "primary": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "tpm": {
+      "type": "object",
+      "required": ["present"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "spec_version": { "type": ["string", "null"] },
+        "manufacturer_id": { "type": ["string", "null"] },
+        "manufacturer_version": { "type": ["string", "null"] },
+        "is_enabled": { "type": ["boolean", "null"] },
+        "is_activated": { "type": ["boolean", "null"] },
+        "is_owned": { "type": ["boolean", "null"] },
+        "pcr_banks": { "type": ["array", "null"], "items": { "type": "string" } }
+      }
+    },
+    "network": {
+      "type": "object",
+      "required": ["adapters"],
+      "properties": {
+        "adapters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["mac_address"],
+            "properties": {
+              "description": { "type": "string" },
+              "mac_address": { "type": "string" },
+              "ip_addresses": { "type": "array", "items": { "type": "string" } },
+              "ip_subnets": { "type": "array", "items": { "type": "string" } },
+              "default_gateways": { "type": "array", "items": { "type": "string" } },
+              "dns_servers": { "type": "array", "items": { "type": "string" } },
+              "dhcp_enabled": { "type": "boolean" },
+              "link_speed_mbps": { "type": ["integer", "null"] },
+              "physical_adapter": { "type": ["boolean", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "peripherals": {
+      "type": "object",
+      "required": ["video_controllers", "usb_devices"],
+      "properties": {
+        "video_controllers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "driver_version": { "type": ["string", "null"] },
+              "adapter_ram_bytes": { "type": ["integer", "null"] },
+              "video_processor": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "usb_devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "device_id": { "type": "string" },
+              "name": { "type": "string" },
+              "manufacturer": { "type": ["string", "null"] },
+              "status": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "monitors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "manufacturer": { "type": ["string", "null"] },
+              "product_code": { "type": ["string", "null"] },
+              "serial_number": { "type": ["string", "null"] },
+              "year_of_manufacture": { "type": ["integer", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "software": {
+      "type": "object",
+      "required": ["applications", "hotfixes"],
+      "properties": {
+        "applications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "version": { "type": ["string", "null"] },
+              "publisher": { "type": ["string", "null"] },
+              "install_date": { "type": ["string", "null"] },
+              "architecture": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "hotfixes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["hotfix_id"],
+            "properties": {
+              "hotfix_id": { "type": "string" },
+              "description": { "type": ["string", "null"] },
+              "installed_on": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "security_baseline": {
+      "type": "object",
+      "required": ["bitlocker", "defender", "firewall_profiles", "smb1_enabled", "lsa_protection_enabled", "credential_guard_running"],
+      "properties": {
+        "bitlocker": {
+          "type": "object",
+          "required": ["volumes"],
+          "properties": {
+            "volumes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "drive_letter": { "type": "string" },
+                  "protection_status": { "type": "integer" },
+                  "conversion_status": { "type": "integer" },
+                  "encryption_method": { "type": "string" },
+                  "lock_status": { "type": "integer" },
+                  "key_protectors": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "defender": {
+          "type": "object",
+          "properties": {
+            "realtime_protection_enabled": { "type": ["boolean", "null"] },
+            "antivirus_enabled": { "type": ["boolean", "null"] },
+            "antispyware_enabled": { "type": ["boolean", "null"] },
+            "behavior_monitor_enabled": { "type": ["boolean", "null"] },
+            "ioav_protection_enabled": { "type": ["boolean", "null"] },
+            "tamper_protection_enabled": { "type": ["boolean", "null"] },
+            "antivirus_signature_version": { "type": ["string", "null"] },
+            "antivirus_engine_version": { "type": ["string", "null"] },
+            "quick_scan_age_days": { "type": ["integer", "null"] }
+          }
+        },
+        "firewall_profiles": {
+          "type": "object",
+          "properties": {
+            "domain": { "type": "object", "properties": { "enabled": { "type": "boolean" }, "default_inbound": { "type": "string" }, "default_outbound": { "type": "string" } } },
+            "private": { "type": "object", "properties": { "enabled": { "type": "boolean" }, "default_inbound": { "type": "string" }, "default_outbound": { "type": "string" } } },
+            "public": { "type": "object", "properties": { "enabled": { "type": "boolean" }, "default_inbound": { "type": "string" }, "default_outbound": { "type": "string" } } }
+          }
+        },
+        "smb1_enabled": { "type": "boolean" },
+        "lsa_protection_enabled": { "type": "boolean" },
+        "credential_guard_running": { "type": "boolean" }
+      }
+    },
+    "user_access": {
+      "type": "object",
+      "required": ["local_administrators", "remote_desktop_users", "dormant_profiles"],
+      "properties": {
+        "local_administrators": { "type": "array", "items": { "type": "string" } },
+        "remote_desktop_users": { "type": "array", "items": { "type": "string" } },
+        "privileged_groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "group_name": { "type": "string" },
+              "members": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "dormant_profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "username": { "type": "string" },
+              "local_path": { "type": "string" },
+              "last_use_time": { "type": ["string", "null"] },
+              "inactive_days": { "type": "integer" }
+            }
+          }
+        },
+        "guest_account_disabled": { "type": ["boolean", "null"] }
+      }
+    }
+  }
+}

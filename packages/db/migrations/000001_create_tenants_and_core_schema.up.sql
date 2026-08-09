@@ -1,14 +1,13 @@
 -- ===========================================================================
--- EndpointGuard Database Master Schema
--- Multi-Tenant, Row-Level Security, JSONB Inventory, and Findings Architecture
--- PostgreSQL 15+
+-- EndpointGuard Migration: 000001_create_tenants_and_core_schema.up.sql
+-- Multi-Tenant Core Architecture & Target Endpoint Schema
 -- ===========================================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ---------------------------------------------------------------------------
--- Tenants & Users
+-- 1. Tenants (Organizations / Enterprise Workspaces)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -22,6 +21,9 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
 
+-- ---------------------------------------------------------------------------
+-- 2. Tenant Users (RBAC: Admin, SecurityOfficer, Auditor, CollectorService)
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenant_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -37,7 +39,7 @@ CREATE TABLE IF NOT EXISTS tenant_users (
 CREATE INDEX IF NOT EXISTS idx_tenant_users_tenant ON tenant_users(tenant_id);
 
 -- ---------------------------------------------------------------------------
--- Endpoints (Agentless Windows 11 & Windows Server Hosts)
+-- 3. Endpoints (Target Windows 11 & Windows Server Hosts)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS endpoints (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -52,8 +54,8 @@ CREATE TABLE IF NOT EXISTS endpoints (
     manufacturer VARCHAR(128) NOT NULL,
     model VARCHAR(128) NOT NULL,
     chassis_type VARCHAR(64) NOT NULL DEFAULT 'Desktop',
-    status VARCHAR(32) NOT NULL DEFAULT 'online',
-    agentless_protocol VARCHAR(32) NOT NULL DEFAULT 'winrm_https',
+    status VARCHAR(32) NOT NULL DEFAULT 'online', -- online, offline, scanning, error
+    agentless_protocol VARCHAR(32) NOT NULL DEFAULT 'winrm_https', -- winrm_https, winrm_http, cim_xml, snmp_v3, ssh_bmc
     compliance_score NUMERIC(5,2) NOT NULL DEFAULT 0.00,
     last_scanned_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -68,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_endpoints_tenant_ip ON endpoints(tenant_id, ip_ad
 CREATE INDEX IF NOT EXISTS idx_endpoints_tenant_compliance ON endpoints(tenant_id, compliance_score);
 
 -- ---------------------------------------------------------------------------
--- Hardware Inventories
+-- 4. Hardware Inventories (Detailed Component Specs)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS hardware_inventories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -92,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_hardware_storage_gin ON hardware_inventories USIN
 CREATE INDEX IF NOT EXISTS idx_hardware_network_gin ON hardware_inventories USING GIN (network_details);
 
 -- ---------------------------------------------------------------------------
--- Security Postures
+-- 5. Security Postures (BitLocker, TPM 2.0, Defender, Firewall, UAC)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS security_postures (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -115,124 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_security_bitlocker_gin ON security_postures USING
 CREATE INDEX IF NOT EXISTS idx_security_defender_gin ON security_postures USING GIN (defender_status);
 
 -- ---------------------------------------------------------------------------
--- Host Snapshots (Historical & Latest Versioned Audits)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS host_snapshots (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    host_id UUID NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
-    snapshot_type VARCHAR(32) NOT NULL DEFAULT 'full',
-    cpu_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    memory_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    storage_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    network_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    bios_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    tpm_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    security_posture JSONB NOT NULL DEFAULT '{}'::jsonb,
-    compliance_score NUMERIC(5,2) NOT NULL DEFAULT 0.00,
-    is_latest BOOLEAN NOT NULL DEFAULT true,
-    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Unique index ensures exactly 1 latest snapshot per host
-CREATE UNIQUE INDEX IF NOT EXISTS idx_host_snapshots_unique_latest ON host_snapshots (host_id) WHERE is_latest = true;
-CREATE INDEX IF NOT EXISTS idx_host_snapshots_tenant_latest ON host_snapshots (tenant_id, host_id) WHERE is_latest = true;
-CREATE INDEX IF NOT EXISTS idx_host_snapshots_timeline ON host_snapshots (host_id, captured_at DESC);
-
--- ---------------------------------------------------------------------------
--- Vulnerabilities & Findings
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS vulnerabilities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    host_id UUID NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
-    cve_id VARCHAR(64) NOT NULL,
-    title VARCHAR(512) NOT NULL,
-    description TEXT NOT NULL,
-    severity VARCHAR(32) NOT NULL,
-    cvss_score NUMERIC(3,1) NOT NULL DEFAULT 0.0,
-    affected_component VARCHAR(255) NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
-    remediation TEXT NOT NULL,
-    discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    resolved_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_vulnerability_host_cve UNIQUE (tenant_id, host_id, cve_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_vulnerabilities_tenant_open_critical ON vulnerabilities (tenant_id, severity, cvss_score DESC, discovered_at DESC) WHERE status = 'OPEN';
-CREATE INDEX IF NOT EXISTS idx_vulnerabilities_host_open ON vulnerabilities (host_id, severity) WHERE status = 'OPEN';
-
--- ---------------------------------------------------------------------------
--- Configuration Drift Events
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS drift_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    host_id UUID NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
-    drift_category VARCHAR(64) NOT NULL,
-    property_name VARCHAR(255) NOT NULL,
-    baseline_value TEXT NOT NULL,
-    current_value TEXT NOT NULL,
-    severity VARCHAR(32) NOT NULL DEFAULT 'HIGH',
-    is_acknowledged BOOLEAN NOT NULL DEFAULT false,
-    acknowledged_by VARCHAR(255),
-    acknowledged_at TIMESTAMPTZ,
-    detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_drift_events_tenant_unacknowledged ON drift_events (tenant_id, severity, detected_at DESC) WHERE is_acknowledged = false;
-CREATE INDEX IF NOT EXISTS idx_drift_events_host_unacknowledged ON drift_events (host_id, detected_at DESC) WHERE is_acknowledged = false;
-
--- ---------------------------------------------------------------------------
--- Compliance Frameworks & Rules
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS compliance_frameworks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code VARCHAR(64) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    version VARCHAR(32) NOT NULL,
-    target_os VARCHAR(128) NOT NULL,
-    description TEXT NOT NULL,
-    is_builtin BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS compliance_rules (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    framework_id UUID NOT NULL REFERENCES compliance_frameworks(id) ON DELETE CASCADE,
-    rule_code VARCHAR(64) NOT NULL,
-    title VARCHAR(512) NOT NULL,
-    category VARCHAR(128) NOT NULL,
-    level VARCHAR(32) NOT NULL DEFAULT 'Level 1',
-    severity VARCHAR(32) NOT NULL DEFAULT 'HIGH',
-    rationale TEXT NOT NULL,
-    expected_value TEXT NOT NULL,
-    remediation_script TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_framework_rule_code UNIQUE (framework_id, rule_code)
-);
-
-CREATE INDEX IF NOT EXISTS idx_compliance_rules_framework ON compliance_rules(framework_id);
-
-CREATE TABLE IF NOT EXISTS compliance_evaluations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    host_id UUID NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
-    rule_id UUID NOT NULL REFERENCES compliance_rules(id) ON DELETE CASCADE,
-    status VARCHAR(32) NOT NULL,
-    actual_value TEXT NOT NULL,
-    evaluated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_tenant_host_rule_eval UNIQUE (tenant_id, host_id, rule_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_compliance_eval_tenant_status ON compliance_evaluations (tenant_id, status);
-CREATE INDEX IF NOT EXISTS idx_compliance_eval_host_status ON compliance_evaluations (host_id, status);
-
--- ---------------------------------------------------------------------------
--- Collector Gateways & Credential Vault
+-- 6. Subnet Collector Gateways (Per-Subnet On-Prem daemons)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS collector_gateways (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -241,7 +126,7 @@ CREATE TABLE IF NOT EXISTS collector_gateways (
     name VARCHAR(255) NOT NULL,
     subnet_cidr VARCHAR(64) NOT NULL,
     mtls_cert_fingerprint VARCHAR(128) NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'healthy',
+    status VARCHAR(32) NOT NULL DEFAULT 'healthy', -- healthy, degraded, offline
     version VARCHAR(32) NOT NULL DEFAULT 'v1.0.0',
     latency_ms INT NOT NULL DEFAULT 0,
     last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -250,19 +135,23 @@ CREATE TABLE IF NOT EXISTS collector_gateways (
 );
 
 CREATE INDEX IF NOT EXISTS idx_gateways_tenant ON collector_gateways(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_gateways_tenant_status ON collector_gateways(tenant_id, status);
 
+-- ---------------------------------------------------------------------------
+-- 7. Dedicated Credential Vault (Zero Plaintext Persistence)
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS vault_credentials (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     opaque_id VARCHAR(128) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    credential_type VARCHAR(64) NOT NULL,
+    credential_type VARCHAR(64) NOT NULL, -- domain_kerberos, domain_ntlm, local_service, snmp_v3, ssh_key
     domain_or_host VARCHAR(255) NOT NULL,
     username VARCHAR(255) NOT NULL,
-    encrypted_secret BYTEA NOT NULL,
-    nonce BYTEA NOT NULL,
-    auth_tag BYTEA NOT NULL,
-    salt BYTEA NOT NULL,
+    encrypted_secret BYTEA NOT NULL, -- AES-256-GCM ciphertext
+    nonce BYTEA NOT NULL,           -- 12-byte GCM nonce
+    auth_tag BYTEA NOT NULL,        -- 16-byte GCM authentication tag
+    salt BYTEA NOT NULL,            -- 16-byte HKDF salt
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_vault_tenant_opaque UNIQUE (tenant_id, opaque_id)
@@ -272,7 +161,7 @@ CREATE INDEX IF NOT EXISTS idx_vault_tenant ON vault_credentials(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_vault_tenant_opaque ON vault_credentials(tenant_id, opaque_id);
 
 -- ---------------------------------------------------------------------------
--- Scan Jobs & Audit Logs
+-- 8. Scan Jobs (Agentless Subnet Execution Records)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS scan_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -283,7 +172,7 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
     protocol VARCHAR(32) NOT NULL DEFAULT 'winrm_https',
     vault_secret_ref VARCHAR(128) NOT NULL,
     gateway_id VARCHAR(128) NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    status VARCHAR(32) NOT NULL DEFAULT 'pending', -- pending, running, completed, failed
     total_hosts INT NOT NULL DEFAULT 0,
     scanned_hosts INT NOT NULL DEFAULT 0,
     compliant_hosts INT NOT NULL DEFAULT 0,
@@ -295,8 +184,12 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_scans_tenant ON scan_jobs(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_scan_jobs_tenant_active ON scan_jobs (tenant_id, status, created_at DESC) WHERE status IN ('pending', 'running');
+CREATE INDEX IF NOT EXISTS idx_scans_tenant_status ON scan_jobs(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_scans_tenant_created ON scan_jobs(tenant_id, created_at DESC);
 
+-- ---------------------------------------------------------------------------
+-- 9. Immutable Security Audit Logs (OWASP ASVS Level 2)
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS security_audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -306,7 +199,7 @@ CREATE TABLE IF NOT EXISTS security_audit_logs (
     action VARCHAR(128) NOT NULL,
     resource_type VARCHAR(64) NOT NULL,
     resource_id VARCHAR(128) NOT NULL,
-    status VARCHAR(32) NOT NULL,
+    status VARCHAR(32) NOT NULL, -- SUCCESS, FAILURE, DENIED
     ip_address VARCHAR(64) NOT NULL,
     details JSONB NOT NULL DEFAULT '{}'::jsonb
 );

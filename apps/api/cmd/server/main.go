@@ -9,11 +9,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/endpointguard/endpointguard/apps/api/internal/config"
-	"github.com/endpointguard/endpointguard/apps/api/internal/handlers"
-	"github.com/endpointguard/endpointguard/apps/api/internal/middleware"
-	"github.com/endpointguard/endpointguard/apps/api/internal/repository"
-	"github.com/endpointguard/endpointguard/apps/api/internal/vault"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/compliance"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/config"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/drift"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/handlers"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/middleware"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/repository"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vault"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vulnscan"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -28,16 +31,41 @@ func main() {
 
 	middleware.LogJSON("info", "bootstrap", cfg.ServiceName, fmt.Sprintf("Starting EndpointGuard API on port %s (env: %s)", cfg.Port, cfg.Environment))
 
-	// Initialize Vault Service
-	vaultService, err := vault.NewVaultService(cfg.VaultMasterKey)
+	// Initialize Vault Backend (Envelope Encryption fallback for local dev)
+	envelopeProvider, err := vault.NewEnvelopeProvider(cfg.VaultMasterKey)
 	if err != nil {
-		middleware.LogJSON("error", "bootstrap", cfg.ServiceName, fmt.Sprintf("Failed to initialize Credential Vault: %v", err))
+		middleware.LogJSON("error", "bootstrap", cfg.ServiceName, fmt.Sprintf("Failed to initialize Credential Vault envelope provider: %v", err))
 		os.Exit(1)
 	}
 
-	// Initialize Repository
+	// Initialize Repositories: Fleet, Vulnerability Findings, Compliance Controls, and Drift Events
 	repo := repository.NewRepository()
-	apiHandler := handlers.NewAPIHandler(repo, vaultService)
+	findingRepo := vulnscan.NewMemoryFindingRepository()
+	compRepo := compliance.NewMemoryComplianceRepository()
+	driftRepo := drift.NewMemoryDriftRepository()
+
+	// Initialize & Start VulnScan Background Worker
+	vulnWorker := vulnscan.NewVulnScanWorker(vulnscan.WorkerConfig{
+		NVDAPIKey:      "",
+		NVDBaseURL:     vulnscan.DefaultNVDBaseURL,
+		CISAKEVURL:     vulnscan.DefaultCISAKEVURL,
+		SyncInterval:   24 * time.Hour,
+		EnableAutoSync: false, // On-demand and scheduled in background
+	}, findingRepo, nil, nil)
+
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+	_ = vulnWorker.Start(workerCtx)
+	defer vulnWorker.Stop()
+
+	// Wire audit callback: every secret resolution writes to the security audit log
+	auditFn := func(entry vault.SecretResolutionAuditEntry) error {
+		repo.AddAuditLog(repository.AuditLogFromVaultEntry(entry))
+		return nil
+	}
+
+	vaultManager := vault.NewVaultManager(envelopeProvider, auditFn)
+	apiHandler := handlers.NewAPIHandler(repo, vaultManager, findingRepo, compRepo, driftRepo)
 
 	// Build Chi Router (Net/HTTP Idiomatic, OWASP ASVS compliant)
 	r := chi.NewRouter()
@@ -52,7 +80,7 @@ func main() {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Correlation-ID", "X-Request-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Correlation-ID", "X-Request-ID", "X-Tenant-ID"},
 		ExposedHeaders:   []string{"Link", "X-Correlation-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -79,6 +107,23 @@ func main() {
 		// Dedicated Credential Vault (Zero Plaintext)
 		api.Get("/vault/credentials", apiHandler.ListVaultCredentials)
 		api.Post("/vault/credentials", apiHandler.CreateVaultCredential)
+
+		// Vulnerability Findings (NVD CVE + CISA KEV Prioritized)
+		api.Get("/findings", apiHandler.ListVulnerabilityFindings)
+		api.Get("/findings/{id}", apiHandler.GetVulnerabilityFindingByID)
+
+		// Compliance Frameworks, Rules, and Evaluations (CIS Benchmarks)
+		api.Get("/compliance/frameworks", apiHandler.ListComplianceFrameworks)
+		api.Get("/compliance/frameworks/{code}/rules", apiHandler.ListComplianceRules)
+		api.Get("/compliance/hosts/{host_id}/results", apiHandler.GetHostComplianceResults)
+		api.Get("/compliance/tenant/summary", apiHandler.GetTenantComplianceSummary)
+
+		// Configuration Drift & Rule-Based Webhook Alerts
+		api.Get("/drift/events", apiHandler.ListDriftEvents)
+		api.Post("/drift/events/{id}/acknowledge", apiHandler.AcknowledgeDriftEvent)
+		api.Get("/alerts/rules", apiHandler.ListAlertRules)
+		api.Post("/alerts/rules", apiHandler.CreateAlertRule)
+		api.Get("/alerts/deliveries", apiHandler.ListWebhookDeliveryLogs)
 
 		// OWASP ASVS Audit Logs
 		api.Get("/audit-logs", apiHandler.ListAuditLogs)

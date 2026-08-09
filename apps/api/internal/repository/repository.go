@@ -6,7 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/endpointguard/endpointguard/apps/api/internal/models"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/models"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vault"
 	"github.com/google/uuid"
 )
 
@@ -655,5 +656,26 @@ func (r *Repository) GetFleetMetrics() models.FleetMetrics {
 		ActiveGateways:      activeGW,
 		TotalGateways:       len(r.gateways),
 		CriticalIssuesCount: 0,
+	}
+}
+
+// AuditLogFromVaultEntry converts a vault SecretResolutionAuditEntry into a
+// models.SecurityAuditLog for persistence. This bridge function lives in the
+// repository package to avoid a circular dependency between vault and models.
+func AuditLogFromVaultEntry(entry vault.SecretResolutionAuditEntry) models.SecurityAuditLog {
+	return models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: entry.CorrelationID,
+		Timestamp:     entry.Timestamp,
+		Actor:         entry.GatewayID,
+		Action:        entry.Action,
+		ResourceType:  "vault_credential",
+		ResourceID:    entry.CredentialRef,
+		Status:        "SUCCESS",
+		IPAddress:     entry.IPAddress,
+		Details: map[string]interface{}{
+			"scan_job_id": entry.ScanJobID,
+			"tenant_id":   entry.TenantID,
+		},
 	}
 }

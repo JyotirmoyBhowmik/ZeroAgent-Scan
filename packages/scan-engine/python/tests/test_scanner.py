@@ -1,12 +1,13 @@
+import sys
+from pathlib import Path
 import pytest
-try:
-    from cis_benchmarks import evaluate_endpoint_cis
-    from agentless_scanner import AgentlessScanner, ScanTarget
-    from bmc_collector import collect_bmc_inventory, BMCTarget
-except ImportError:
-    from packages.scan_engine.python.cis_benchmarks import evaluate_endpoint_cis
-    from packages.scan_engine.python.agentless_scanner import AgentlessScanner, ScanTarget
-    from packages.scan_engine.python.bmc_collector import collect_bmc_inventory, BMCTarget
+
+# Add parent directory to sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from cis_benchmarks import evaluate_endpoint_cis
+from agentless_scanner import AgentlessScanner, ScanTarget
+from bmc_collector import collect_bmc_inventory, BMCTarget
 
 
 @pytest.mark.asyncio
