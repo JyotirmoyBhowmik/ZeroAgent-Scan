@@ -3,7 +3,7 @@
   "application": {
     "name": "ZeroAgent-Scan",
     "service_display_name": "ZeroAgent-Scan EMS Enterprise Control Plane",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "install_path": "C:\\apps\\zeroagent",
     "log_path": "C:\\apps\\zeroagent\\logs",
     "backup_path": "D:\\backups\\zeroagent",
@@ -20,7 +20,7 @@
     "name": "zeroagent_prod",
     "username": "zeroagent_app",
     "data_path": "D:\\postgres\\data",
-    "pg_dump_path": "C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe"
+    "pg_dump_path": "C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe"
   },
   "network": {
     "api_port": 8080,

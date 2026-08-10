@@ -91,7 +91,7 @@ foreach ($Dir in $Directories) {
 # ---------------------------------------------------------------------------
 # 4. Check & Install Runtime Prerequisites
 # ---------------------------------------------------------------------------
-Log-Message "INFO" "Checking runtime prerequisites (Node.js LTS, PostgreSQL 15, NSSM)..."
+Log-Message "INFO" "Checking runtime prerequisites (Node.js 22 LTS, PostgreSQL 17, NSSM)..."
 
 # A. Node.js Verification
 $NodeInstalled = $false
@@ -104,11 +104,11 @@ try {
 } catch {}
 
 if (-not $NodeInstalled) {
-    Log-Message "WARN" "Node.js not detected. Downloading Node.js LTS v20 MSI..."
-    $NodeMsiPath = Join-Path $Config.application.temp_path "node-v20-x64.msi"
-    $NodeUrl = "https://nodejs.org/dist/v20.12.2/node-v20.12.2-x64.msi"
+    Log-Message "WARN" "Node.js not detected. Downloading Node.js LTS v22 MSI..."
+    $NodeMsiPath = Join-Path $Config.application.temp_path "node-v22-x64.msi"
+    $NodeUrl = "https://nodejs.org/dist/v22.14.0/node-v22.14.0-x64.msi"
     Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeMsiPath -UseBasicParsing
-    Log-Message "INFO" "Installing Node.js silently via msiexec..."
+    Log-Message "INFO" "Installing Node.js 22 LTS silently via msiexec..."
     Start-Process msiexec.exe -ArgumentList "/i `"$NodeMsiPath`" /qn /norestart" -Wait -NoNewWindow
     Log-Message "INFO" "Node.js installation completed."
 }
