@@ -167,6 +167,7 @@ func main() {
 			protected.With(auth.RequirePermission(auth.PermissionManageCredentials)).Get("/vault/credentials", apiHandler.ListVaultCredentials)
 			protected.With(auth.RequirePermission(auth.PermissionManageCredentials), auth.RequireStepUp()).Post("/vault/credentials", apiHandler.CreateVaultCredential)
 			protected.With(auth.RequirePermission(auth.PermissionManageCredentials), auth.RequireStepUp()).Post("/vault/credentials/{id}/rotate", apiHandler.RotateVaultCredential)
+			protected.With(auth.RequirePermission(auth.PermissionManageCredentials)).Post("/vault/credentials/{id}/test", apiHandler.TestVaultCredential)
 
 			// Vulnerability Findings (NVD CVE + CISA KEV Prioritized)
 			protected.With(auth.RequirePermission(auth.PermissionReadFindings)).Get("/findings", apiHandler.ListVulnerabilityFindings)

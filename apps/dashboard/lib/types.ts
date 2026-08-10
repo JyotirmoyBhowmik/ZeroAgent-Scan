@@ -144,6 +144,7 @@ export interface SecurityPosture {
   credential_guard_enabled?: boolean;
   lsa_protection_enabled?: boolean;
   smbv1_disabled?: boolean;
+  rdp_nla_required?: boolean;
   reboot_pending?: {
     component_based_servicing?: boolean;
     windows_update?: boolean;

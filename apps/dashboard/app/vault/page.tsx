@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { KeyRound, Shield, Lock, Plus, CheckCircle2, AlertTriangle, Fingerprint, EyeOff } from "lucide-react";
+import { KeyRound, Shield, Lock, Plus, CheckCircle2, AlertTriangle, Fingerprint, EyeOff, Play, Check } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { api } from "@/lib/api";
 import { VaultCredentialSummary } from "@/lib/types";
@@ -9,6 +9,10 @@ import { VaultCredentialSummary } from "@/lib/types";
 export default function VaultPage() {
   const [credentials, setCredentials] = useState<VaultCredentialSummary[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [testModalCred, setTestModalCred] = useState<VaultCredentialSummary | null>(null);
+  const [testTargetIP, setTestTargetIP] = useState("10.100.1.42");
+  const [testResult, setTestResult] = useState<{ status: string; latency_ms: number; auth_mechanism: string; message: string } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
 
   // Form State
   const [name, setName] = useState("");
@@ -46,6 +50,19 @@ export default function VaultPage() {
       setShowModal(false);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleTestProbe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testModalCred) return;
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const result = await api.testVaultCredential(testModalCred.opaque_id, testTargetIP);
+      setTestResult(result);
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -87,37 +104,112 @@ export default function VaultPage() {
       {/* Tokenized Credentials List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {credentials.map((c) => (
-          <div key={c.id} className="bg-white rounded-xl border border-charcoal-200 p-5 card-border">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-charcoal-100 border border-charcoal-200 text-charcoal-800 flex items-center justify-center">
-                  <KeyRound className="w-4 h-4" />
+          <div key={c.id} className="bg-white rounded-xl border border-charcoal-200 p-5 card-border flex flex-col justify-between">
+            <div>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-charcoal-100 border border-charcoal-200 text-charcoal-800 flex items-center justify-center">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-charcoal-950">{c.name}</h3>
+                    <span className="text-[11px] text-charcoal-500 font-mono block">
+                      {c.domain_or_host} • {c.username}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm text-charcoal-950">{c.name}</h3>
-                  <span className="text-[11px] text-charcoal-500 font-mono block">
-                    {c.domain_or_host} • {c.username}
-                  </span>
+                <Badge variant="info" size="sm">
+                  {c.credential_type}
+                </Badge>
+              </div>
+
+              <div className="mt-4 p-3 bg-charcoal-50 rounded-lg border border-charcoal-200 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-charcoal-500 font-semibold text-[10px] uppercase">Opaque Token ID:</span>
+                  <span className="font-mono font-bold text-charcoal-950">{c.opaque_id}</span>
+                </div>
+                <div className="flex justify-between items-center mt-2 pt-2 border-t border-charcoal-200 text-[10px] text-charcoal-500 font-mono">
+                  <span>Encryption: AES-256-GCM</span>
+                  <span>Secret: Protected (Zeroized)</span>
                 </div>
               </div>
-              <Badge variant="info" size="sm">
-                {c.credential_type}
-              </Badge>
             </div>
 
-            <div className="mt-4 p-3 bg-charcoal-50 rounded-lg border border-charcoal-200 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-charcoal-500 font-semibold text-[10px] uppercase">Opaque Token ID:</span>
-                <span className="font-mono font-bold text-charcoal-950">{c.opaque_id}</span>
-              </div>
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-charcoal-200 text-[10px] text-charcoal-500 font-mono">
-                <span>Encryption: AES-256-GCM</span>
-                <span>Secret: Protected (Zeroized)</span>
-              </div>
+            <div className="mt-4 pt-3 border-t border-charcoal-100 flex justify-end">
+              <button
+                onClick={() => {
+                  setTestModalCred(c);
+                  setTestResult(null);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-charcoal-100 hover:bg-charcoal-200 text-charcoal-800 text-xs font-semibold rounded-lg transition-all"
+              >
+                <Play className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Test Against Target Host</span>
+              </button>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Test Credential Modal */}
+      {testModalCred && (
+        <div className="fixed inset-0 bg-charcoal-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl border border-charcoal-200 max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-charcoal-950">Test Credential Probe</h2>
+              <button
+                onClick={() => {
+                  setTestModalCred(null);
+                  setTestResult(null);
+                }}
+                className="text-xs font-semibold text-charcoal-500 hover:text-charcoal-900"
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="text-xs text-charcoal-600">
+              Validate <strong>{testModalCred.name}</strong> ({testModalCred.opaque_id}) against a single host without exposing the secret.
+            </p>
+
+            <form onSubmit={handleTestProbe} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-charcoal-700 mb-1">Target IP Address</label>
+                <input
+                  type="text"
+                  value={testTargetIP}
+                  onChange={(e) => setTestTargetIP(e.target.value)}
+                  required
+                  placeholder="10.100.1.42"
+                  className="w-full px-3 py-2 bg-charcoal-50 border border-charcoal-200 rounded-lg font-mono text-charcoal-900 focus:ring-2 focus:ring-charcoal-950 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isTesting}
+                className="w-full py-2.5 bg-charcoal-950 hover:bg-charcoal-800 text-white font-semibold rounded-lg shadow-sm transition-all"
+              >
+                {isTesting ? "Testing WinRM Probe..." : "Run Non-Disruptive Test Probe"}
+              </button>
+            </form>
+
+            {testResult && (
+              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-800 font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Validation Successful</span>
+                </div>
+                <p className="text-emerald-900">{testResult.message}</p>
+                <div className="pt-2 border-t border-emerald-200 text-[10px] text-emerald-700 font-mono flex justify-between">
+                  <span>Latency: {testResult.latency_ms}ms</span>
+                  <span>Auth: {testResult.auth_mechanism}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Register Modal */}
       {showModal && (
@@ -154,8 +246,9 @@ export default function VaultPage() {
                   className="w-full px-3 py-2 bg-charcoal-50 border border-charcoal-200 rounded-lg text-charcoal-900 focus:ring-2 focus:ring-charcoal-950 focus:outline-none"
                 >
                   <option value="domain_kerberos">Active Directory Domain (Kerberos / gMSA)</option>
+                  <option value="domain_laps">Local Administrator Password Solution (LAPS)</option>
                   <option value="domain_ntlm">Active Directory Domain (NTLM over HTTPS)</option>
-                  <option value="local_service">Local Service Account</option>
+                  <option value="local_service">Local Least-Privilege Service Account</option>
                   <option value="snmp_v3">SNMPv3 Auth/Priv Key (for BMC)</option>
                   <option value="ssh_key">SSH Private Key (for iLO/iDRAC)</option>
                 </select>
