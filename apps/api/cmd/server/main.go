@@ -141,9 +141,6 @@ func main() {
 	r.Use(middleware.SecurityHeadersMiddleware)
 	r.Use(telemetry.LatencyMiddleware)
 
-	// Standard Prometheus Scrape Endpoint
-	r.Get("/metrics", telemetry.GetRegistry().MetricsHandler())
-
 	// Strict CORS
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
@@ -153,6 +150,9 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+
+	// Standard Prometheus Scrape Endpoint
+	r.Get("/metrics", telemetry.GetRegistry().MetricsHandler())
 
 	// API Routes V1
 	r.Route("/api/v1", func(api chi.Router) {
