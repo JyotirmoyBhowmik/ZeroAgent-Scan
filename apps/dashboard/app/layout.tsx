@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopHeader } from "@/components/layout/TopHeader";
+import { DevEnvironmentBanner } from "@/components/layout/DevEnvironmentBanner";
 
 export const metadata: Metadata = {
   title: "EndpointGuard | 100% Agentless Endpoint Audit & Compliance",
@@ -16,14 +17,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-charcoal-50 text-charcoal-950 min-h-screen flex antialiased">
-        {/* Persistent Enterprise Sidebar */}
-        <Sidebar />
+      <body className="bg-charcoal-50 text-charcoal-950 min-h-screen flex flex-col antialiased">
+        {/* Impossible-to-miss Development Environment Warning Bar */}
+        <DevEnvironmentBanner />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-          <TopHeader />
-          <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">{children}</main>
+        <div className="flex-1 flex min-w-0">
+          {/* Persistent Enterprise Sidebar */}
+          <Sidebar />
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+            <TopHeader />
+            <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">{children}</main>
+          </div>
         </div>
       </body>
     </html>
