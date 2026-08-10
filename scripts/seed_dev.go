@@ -5,9 +5,38 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
+	// -------------------------------------------------------------------------
+	// Production Environment Gate: Strictly refuse execution in production
+	// -------------------------------------------------------------------------
+	nodeEnv := os.Getenv("NODE_ENV")
+	appEnv := os.Getenv("ENVIRONMENT")
+	zeroEnv := os.Getenv("ZEROAGENT_ENV")
+
+	if strings.EqualFold(nodeEnv, "production") || strings.EqualFold(appEnv, "production") || strings.EqualFold(zeroEnv, "production") {
+		fmt.Println("\n==========================================================================")
+		fmt.Println(" ❌ [FATAL SECURITY ERROR] DATABASE SEEDING REJECTED!")
+		fmt.Println("==========================================================================")
+		fmt.Printf(" • Detected production environment flag:\n")
+		if strings.EqualFold(nodeEnv, "production") {
+			fmt.Printf("   - NODE_ENV=%s\n", nodeEnv)
+		}
+		if strings.EqualFold(appEnv, "production") {
+			fmt.Printf("   - ENVIRONMENT=%s\n", appEnv)
+		}
+		if strings.EqualFold(zeroEnv, "production") {
+			fmt.Printf("   - ZEROAGENT_ENV=%s\n", zeroEnv)
+		}
+		fmt.Println(" • Safety Policy Violation: Demo and seed mock data can NEVER be inserted")
+		fmt.Println("   into a production database deployment.")
+		fmt.Println(" • Aborting execution immediately with exit code 1.")
+		fmt.Println("==========================================================================\n")
+		os.Exit(1)
+	}
+
 	fmt.Println("==========================================================================")
 	fmt.Println(" ZeroAgent-Scan / EndpointGuard EMS — Local Dev Database Seeder")
 	fmt.Println("==========================================================================")

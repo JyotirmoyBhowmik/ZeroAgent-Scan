@@ -401,3 +401,27 @@ graph TD
   ```
 - [ ] **Step 5: Verify Vault Auth Probe**: Run test probe in `/vault` against a test endpoint.
 - [ ] **Step 6: Check Alert Health**: Verify alert delivery in `/admin` with "Send Test Alert".
+
+---
+
+## 8. Production Readiness & Pre-Go-Live Audit
+
+Before cutting over traffic or scanning real endpoints, perform the comprehensive **Production Readiness Audit** to guarantee that no demo data, weak development keys, or mock flags exist in the environment:
+
+### Option A: Via Command Line (Automated CI/CD Gate)
+```powershell
+# Run one-time production readiness audit (exits with code 0 on PASS, 1 on FAIL)
+C:\apps\zeroagent\api\server.exe --readiness-check
+```
+
+### Option B: Via Web Dashboard GUI
+1. Navigate to [https://zeroagent.corp.local/admin/readiness](https://zeroagent.corp.local/admin/readiness)
+2. Review the 6 security pillars:
+   - **Demo & Seed Data Elimination**: Asserts zero `DEMO-*` hosts or RFC 5737 IPs in database.
+   - **Vault Master Key Entropy**: Asserts non-default, high-entropy 256-bit AES-GCM key.
+   - **Break-Glass Credential Rotation**: Asserts emergency password has been rotated.
+   - **Simulation Flags Disabled**: Asserts `MOCK_SCAN_MODE=false`.
+   - **Audit Logging Stream**: Asserts immutable trace logging pipeline is active.
+   - **Collector Gateway Topology**: Asserts mTLS gateways are operational.
+3. Confirm overall verdict displays: 🟢 **GO-LIVE APPROVED: PRODUCTION READY**.
+

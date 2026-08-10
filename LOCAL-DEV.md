@@ -92,9 +92,12 @@ When `MOCK_SCAN_MODE=true` is set, the scan orchestrator runs in **safe simulati
 ## 🛠️ Developer Commands & Scripts
 
 ```bash
-# Re-apply seed data manually at any time
+# Re-apply seed data manually at any time (refuses to run if NODE_ENV/ENVIRONMENT=production)
 npm run seed:dev
 # or: go run scripts/seed_dev.go
+
+# Run pre-go-live production readiness audit from CLI
+go run ./apps/api/cmd/server --readiness-check
 
 # Run API unit & integration tests
 go test -v ./apps/api/...
@@ -105,6 +108,17 @@ cd apps/dashboard && npm run build
 # Stop and wipe the local dev environment
 docker compose -f docker-compose.dev.yml down -v
 ```
+
+---
+
+## 🔒 Production Safety Gates & Demo Data Invariant
+
+To guarantee that demo/seed data, default development credentials, and simulated scan flags can **never** contaminate a production deployment, four layers of defense-in-depth are enforced:
+
+1. **Seed Script Hard-Fail**: `scripts/seed_dev.go` and `packages/db/seed-dev.sql` refuse execution with exit code 1 whenever `NODE_ENV=production`, `ENVIRONMENT=production`, or `ZEROAGENT_ENV=production` is set.
+2. **API Boot-Time Guard**: On startup in production mode, the API inspects active inventory for `DEMO-*` hostnames or RFC 5737 documentation IP ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`). If found, it aborts startup with `os.Exit(1)` and logs the offending records to stderr.
+3. **Pre-Deploy CI/CD Cleanliness Gate**: `deploy/deploy-update.ps1` runs a pre-flight SQL query against the target database before stopping any services or applying updates, blocking the release if demo records are detected.
+4. **Interactive Production Readiness Auditor**: Available in the dashboard at [`http://localhost:3000/admin/readiness`](http://localhost:3000/admin/readiness) or via `server.exe --readiness-check` to audit key entropy, default passwords, mock flags, and audit log health in a single unified view.
 
 ---
 
@@ -122,3 +136,4 @@ To connect to the local PostgreSQL database using `psql` or a GUI client (DBeave
 # Connect via Docker CLI:
 docker exec -it zeroagent-dev-postgres psql -U endpointguard_app -d endpointguard
 ```
+

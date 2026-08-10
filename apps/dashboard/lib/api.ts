@@ -24,6 +24,8 @@ import {
   SnapshotRetentionDryRun,
   SnapshotRetentionExecuteRequest,
   SnapshotRetentionExecuteResult,
+  ReadinessCheckItem,
+  ProductionReadinessReport,
 } from "./types";
 import {
   MOCK_METRICS,
@@ -653,5 +655,75 @@ export const api = {
       audit_log_id: `audit-retention-${Date.now()}`,
     };
   },
+  fetchProductionReadiness: async (): Promise<ProductionReadinessReport> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/readiness`, {
+        headers: { "X-Tenant-ID": "tenant-default-01" },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      overall_verdict: "FAIL",
+      environment: "development",
+      generated_at: new Date().toISOString(),
+      passed_count: 4,
+      failed_count: 2,
+      warning_count: 1,
+      total_checks: 7,
+      checks: [
+        {
+          id: "DEMO_DATA_ABSENCE",
+          name: "Demo & RFC 5737 Mock Fleet Elimination",
+          pillar: "DEMO_HYGIENE",
+          status: "FAIL",
+          message: "Found 30 non-production demo endpoints or RFC 5737 IP addresses in database.",
+          remediation: "Purge all seed data via 'DELETE FROM endpoints WHERE hostname LIKE ''DEMO-%'';' before production deployment.",
+        },
+        {
+          id: "VAULT_MASTER_KEY",
+          name: "AES-256-GCM Vault Master Key Entropy",
+          pillar: "CREDENTIAL_SECURITY",
+          status: "FAIL",
+          message: "Default insecure development VAULT_MASTER_KEY_HEX is active in configuration.",
+          remediation: "Generate a cryptographically random 32-byte key via 'openssl rand -hex 32' and set VAULT_MASTER_KEY_HEX in production environment.",
+        },
+        {
+          id: "BREAKGLASS_CREDENTIAL_ROTATION",
+          name: "Break-Glass Emergency Account Password Rotation",
+          pillar: "CREDENTIAL_SECURITY",
+          status: "WARN",
+          message: "Break-glass account 'breakglass' is currently using the default example password.",
+          remediation: "Rotate break-glass emergency password immediately via admin portal or API with step-up MFA.",
+        },
+        {
+          id: "MOCK_SCAN_MODE_FLAG",
+          name: "Agentless Scan Engine Simulation Flag",
+          pillar: "FEATURE_FLAGS",
+          status: "PASS",
+          message: "Mock scan simulation mode is disabled. Real WinRM/DCOM network scanning active.",
+          remediation: "None required.",
+        },
+        {
+          id: "AUDIT_LOG_PIPELINE",
+          name: "OWASP ASVS Immutable Audit Logging Stream",
+          pillar: "AUDIT_INTEGRITY",
+          status: "PASS",
+          message: "Audit logging pipeline active with immutable trace events recorded.",
+          remediation: "None required. Audit stream active.",
+        },
+        {
+          id: "GATEWAY_TOPOLOGY",
+          name: "Subnet Collector Gateway Deployment",
+          pillar: "NETWORK_MTLS",
+          status: "PASS",
+          message: "Registered collector gateways with mTLS mutual authentication.",
+          remediation: "None required.",
+        },
+      ],
+    };
+  },
 };
+
 

@@ -4,6 +4,19 @@
 -- drift events, immutable audit logs, and users across all 5 roles.
 -- ===========================================================================
 
+-- ---------------------------------------------------------------------------
+-- Safety Gate: Refuse execution if database session is marked production
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF current_setting('zeroagent.environment', true) = 'production' OR
+       current_setting('app.environment', true) = 'production' OR
+       current_database() LIKE '%prod%' THEN
+        RAISE EXCEPTION 'FATAL SECURITY VIOLATION: ZeroAgent-Scan demo/seed data rejected! Database % is marked as production.', current_database();
+    END IF;
+END $$;
+
+
 -- 1. Default Demo Tenant
 INSERT INTO tenants (id, name, slug, subscription_tier, is_active, created_at, updated_at)
 VALUES (

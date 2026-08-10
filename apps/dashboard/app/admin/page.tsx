@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ShieldCheck,
   Layers,
@@ -29,6 +30,7 @@ import {
   FileCode,
   FileCheck2,
   RefreshCw,
+  ArrowRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
@@ -240,14 +242,53 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-6">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2">
-          <Settings2 className="w-6 h-6 text-charcoal-900" />
-          <h1 className="text-2xl font-bold tracking-tight text-charcoal-950">Enterprise Admin & System Health</h1>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Settings2 className="w-6 h-6 text-charcoal-900" />
+            <h1 className="text-2xl font-bold tracking-tight text-charcoal-950">Enterprise Admin & System Health</h1>
+          </div>
+          <p className="text-sm text-charcoal-600 mt-1">
+            Verify human alerting delivery, configure JSONB snapshot cold-storage retention policies, and manage fleet rollout tiers.
+          </p>
         </div>
-        <p className="text-sm text-charcoal-600 mt-1">
-          Verify human alerting delivery, configure JSONB snapshot cold-storage retention policies, and manage fleet rollout tiers.
-        </p>
+
+        <Link
+          href="/admin/readiness"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all shrink-0"
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Production Readiness Check</span>
+          <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+        </Link>
+      </div>
+
+      {/* Production Readiness Quick Status Banner */}
+      <div className="p-4 rounded-xl border bg-gradient-to-r from-emerald-950 via-charcoal-950 to-charcoal-900 text-white border-charcoal-800 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-white">Pre-Go-Live Production Safety Gates Active</span>
+              <span className="text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
+                ZERO DEMO DATA INVARIANT
+              </span>
+            </div>
+            <p className="text-xs text-charcoal-300 mt-0.5">
+              Automated startup guards, CI/CD database cleanliness verification, and key entropy audits are enforced.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/admin/readiness"
+          className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold inline-flex items-center gap-1.5 shrink-0 bg-charcoal-900 px-3 py-1.5 rounded-lg border border-charcoal-700 hover:border-emerald-500 transition-colors"
+        >
+          <span>Run Full Audit</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Alert Verification Status Banner */}

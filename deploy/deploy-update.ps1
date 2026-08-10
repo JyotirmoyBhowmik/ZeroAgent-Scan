@@ -49,6 +49,39 @@ Log-Message "INFO" "============================================================
 
 try {
     # -----------------------------------------------------------------------
+    # 0. Pre-Flight CI/CD Gate: Verify Database Cleanliness (No Demo Seed Data)
+    # -----------------------------------------------------------------------
+    Log-Message "INFO" "Running pre-deployment database cleanliness verification..."
+    $PgUser = if ($Config.database.user) { $Config.database.user } else { "endpointguard_app" }
+    $PgDb = if ($Config.database.name) { $Config.database.name } else { "endpointguard" }
+    $PgHost = if ($Config.database.host) { $Config.database.host } else { "localhost" }
+    $PgPort = if ($Config.database.port) { $Config.database.port } else { "5432" }
+
+    $CheckSql = "SELECT COUNT(*) FROM endpoints WHERE hostname LIKE 'DEMO-%' OR ip_address <<= '192.0.2.0/24' OR ip_address <<= '198.51.100.0/24' OR ip_address <<= '203.0.113.0/24';"
+    $PsqlCmd = "psql -h $PgHost -p $PgPort -U $PgUser -d $PgDb -t -A -c `"$CheckSql`""
+    
+    $DemoCount = 0
+    try {
+        $PsqlOutput = Invoke-Expression $PsqlCmd 2>$null
+        if ($PsqlOutput -match '^\d+$') {
+            $DemoCount = [int]$PsqlOutput.Trim()
+        }
+    } catch {
+        Log-Message "WARN" "Database cleanliness query note: $_"
+    }
+
+    if ($DemoCount -gt 0) {
+        Log-Message "FATAL" "=========================================================================="
+        Log-Message "FATAL" "❌ PRE-DEPLOYMENT GATE FAILED: DEMO SEED DATA DETECTED IN TARGET DATABASE!"
+        Log-Message "FATAL" "Found $DemoCount endpoints with 'DEMO-' prefix or RFC 5737 documentation IPs."
+        Log-Message "FATAL" "Safety Policy Violation: Production updates cannot be applied to a dirty seed DB."
+        Log-Message "FATAL" "Aborting deployment immediately before modifying any running services."
+        Log-Message "FATAL" "=========================================================================="
+        throw "Deployment rejected by Pre-Flight Production Readiness Gate."
+    }
+    Log-Message "INFO" "Database cleanliness verified: 0 demo records detected."
+
+    # -----------------------------------------------------------------------
     # 1. Stop Running NSSM Services
     # -----------------------------------------------------------------------
     Log-Message "INFO" "Stopping ZeroAgentAPI service..."

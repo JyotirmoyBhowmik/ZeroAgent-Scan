@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/handlers"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/middleware"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/openapi"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/readiness"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/repository"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/telemetry"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vault"
@@ -33,7 +35,7 @@ func main() {
 	}
 
 	// Initialize Vault Provider
-	envelopeProvider, err := vault.NewEnvelopeProvider(nil)
+	envelopeProvider, err := vault.NewEnvelopeProvider(cfg.VaultMasterKey)
 	if err != nil {
 		fmt.Printf("Failed to initialize vault provider: %v\n", err)
 		os.Exit(1)
@@ -45,6 +47,55 @@ func main() {
 	compRepo := compliance.NewMemoryComplianceRepository()
 	driftRepo := drift.NewMemoryDriftRepository()
 	authRepo := auth.NewMemoryAuthRepository()
+
+	// -------------------------------------------------------------------------
+	// CLI Flag: One-time Production Readiness Audit
+	// -------------------------------------------------------------------------
+	for _, arg := range os.Args[1:] {
+		if arg == "--readiness-check" || arg == "-readiness-check" {
+			report := readiness.EvaluateProductionReadiness(repo, authRepo, cfg)
+			fmt.Println("==========================================================================")
+			fmt.Println(" ZeroAgent-Scan / EndpointGuard EMS — Production Readiness Audit Report")
+			fmt.Println("==========================================================================")
+			fmt.Printf(" • Environment:     %s\n", report.Environment)
+			fmt.Printf(" • Overall Verdict: %s\n", report.OverallVerdict)
+			fmt.Printf(" • Checks Passed:   %d/%d\n", report.PassedCount, report.TotalChecks)
+			fmt.Printf(" • Checks Failed:   %d\n", report.FailedCount)
+			fmt.Printf(" • Warnings:        %d\n", report.WarningCount)
+			fmt.Println("--------------------------------------------------------------------------")
+			for _, c := range report.Checks {
+				badge := "[PASS]"
+				if c.Status == "FAIL" {
+					badge = "[FAIL]"
+				} else if c.Status == "WARN" {
+					badge = "[WARN]"
+				}
+				fmt.Printf(" %s %s: %s\n", badge, c.Name, c.Message)
+				if c.Status != "PASS" && c.Remediation != "" {
+					fmt.Printf("        Remediation: %s\n", c.Remediation)
+				}
+			}
+			fmt.Println("==========================================================================")
+			if report.OverallVerdict == "PASS" {
+				os.Exit(0)
+			}
+			os.Exit(1)
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Production Boot Guard: Strictly reject startup if demo data is detected
+	// -------------------------------------------------------------------------
+	if strings.EqualFold(cfg.Environment, "production") || strings.EqualFold(os.Getenv("NODE_ENV"), "production") {
+		if err := readiness.VerifyNoDemoDataInProduction(repo); err != nil {
+			fmt.Fprintf(os.Stderr, "\n==========================================================================\n")
+			fmt.Fprintf(os.Stderr, " ❌ [FATAL SECURITY ERROR] PRODUCTION STARTUP ABORTED!\n")
+			fmt.Fprintf(os.Stderr, "==========================================================================\n")
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "==========================================================================\n\n")
+			os.Exit(1)
+		}
+	}
 
 	// Initialize Token Service, OIDC, & Rate Limiter
 	tokenService := auth.NewTokenService("enterprise-endpointguard-master-jwt-secret-key-32b!", "endpointguard-api")
@@ -77,6 +128,7 @@ func main() {
 
 	vaultManager := vault.NewVaultManager(envelopeProvider, auditFn)
 	apiHandler := handlers.NewAPIHandler(repo, vaultManager, findingRepo, compRepo, driftRepo)
+	apiHandler.SetAuthConfig(authRepo, cfg)
 	authHandler := handlers.NewAuthHandler(authRepo, tokenService, oidcService)
 
 	// Build Chi Router (Net/HTTP Idiomatic, OWASP ASVS compliant)
@@ -201,6 +253,7 @@ func main() {
 			protected.With(auth.RequirePermission(auth.PermissionManageAlerts)).Get("/alerts/deliveries", apiHandler.ListWebhookDeliveryLogs)
 			protected.With(auth.RequirePermission(auth.PermissionManageAlerts)).Post("/admin/health/test-alert", apiHandler.SendTestAlert)
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/admin/health/status", apiHandler.GetAlertHealthStatus)
+			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/admin/readiness", apiHandler.GetProductionReadiness)
 
 			// Executive & Compliance Reports
 			protected.With(auth.RequirePermission(auth.PermissionGenerateReports)).Post("/reports", apiHandler.GenerateReport)

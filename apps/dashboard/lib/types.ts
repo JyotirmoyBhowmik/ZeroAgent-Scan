@@ -492,3 +492,25 @@ export interface SnapshotRetentionExecuteResult {
   audit_log_id: string;
 }
 
+export interface ReadinessCheckItem {
+  id: string;
+  name: string;
+  pillar: "DEMO_HYGIENE" | "CREDENTIAL_SECURITY" | "FEATURE_FLAGS" | "AUDIT_INTEGRITY" | "NETWORK_MTLS";
+  status: "PASS" | "FAIL" | "WARN";
+  message: string;
+  remediation: string;
+  details?: string[];
+}
+
+export interface ProductionReadinessReport {
+  overall_verdict: "PASS" | "FAIL";
+  environment: string;
+  generated_at: string;
+  passed_count: number;
+  failed_count: number;
+  warning_count: number;
+  total_checks: number;
+  checks: ReadinessCheckItem[];
+}
+
+

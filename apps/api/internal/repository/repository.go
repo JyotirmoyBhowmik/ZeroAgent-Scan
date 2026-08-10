@@ -662,6 +662,19 @@ func (r *Repository) ListEndpoints(search, osFilter, statusFilter, tierFilter st
 	return result
 }
 
+func (r *Repository) SaveEndpoint(ep models.Endpoint) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	copied := ep
+	r.endpoints[ep.ID] = &copied
+}
+
+func (r *Repository) ClearEndpoints() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.endpoints = make(map[string]*models.Endpoint)
+}
+
 func (r *Repository) GetRolloutSettings() models.RolloutSettings {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

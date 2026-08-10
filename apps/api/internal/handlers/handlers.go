@@ -11,9 +11,11 @@ import (
 
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/auth"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/compliance"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/config"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/drift"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/middleware"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/models"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/readiness"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/reports"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/repository"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/retention"
@@ -34,6 +36,8 @@ type APIHandler struct {
 	reportGen         *reports.ReportGenerator
 	webhookDispatcher *drift.WebhookDispatcher
 	retentionEngine   *retention.Engine
+	authRepo          auth.AuthRepository
+	cfg               *config.Config
 }
 
 func NewAPIHandler(
@@ -1115,4 +1119,19 @@ func (h *APIHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"version":   "1.0.0",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func (h *APIHandler) SetAuthConfig(authRepo auth.AuthRepository, cfg *config.Config) {
+	h.authRepo = authRepo
+	h.cfg = cfg
+}
+
+// ---------------------------------------------------------------------------
+// 13. Production Readiness Check Endpoint
+// ---------------------------------------------------------------------------
+
+func (h *APIHandler) GetProductionReadiness(w http.ResponseWriter, r *http.Request) {
+	report := readiness.EvaluateProductionReadiness(h.repo, h.authRepo, h.cfg)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(report)
 }
