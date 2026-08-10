@@ -11,7 +11,8 @@
 
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = ".\deploy.config.json"
+    [string]$ConfigPath = ".\deploy.config.json",
+    [switch]$RunDrill
 )
 
 $ErrorActionPreference = "Stop"
@@ -90,3 +91,17 @@ foreach ($Old in $OldBackups) {
 }
 
 Log-Message "INFO" "Backup and retention maintenance completed."
+
+# ---------------------------------------------------------------------------
+# Optional Restore Drill Execution
+# ---------------------------------------------------------------------------
+if ($RunDrill) {
+    Log-Message "INFO" "Executing automatic restore drill on newly generated backup..."
+    $ScriptDir = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
+    $DrillScript = Join-Path $ScriptDir "restore-drill.ps1"
+    if (Test-Path $DrillScript) {
+        & $DrillScript -ConfigPath $ConfigPath -BackupFilePath $BackupFilePath
+    } else {
+        Log-Message "WARN" "restore-drill.ps1 script not found at '$DrillScript'."
+    }
+}

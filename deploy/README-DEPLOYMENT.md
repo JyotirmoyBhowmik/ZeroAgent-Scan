@@ -12,8 +12,10 @@ This directory contains the production automation suite for deploying and operat
 | [`install.ps1`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/install.ps1) | Idempotent system provisioning script (prereqs, service accounts, database, NSSM services, firewall). |
 | [`configure-tls.ps1`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/configure-tls.ps1) | Enforces TLS 1.2+ minimum in Windows SCHANNEL registry and binds SSL/TLS certificates. |
 | [`deploy-update.ps1`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/deploy-update.ps1) | Zero-downtime deployment script with automatic rollback on health check failure. |
-| [`backup-db.ps1`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/backup-db.ps1) | Automated PostgreSQL `pg_dump` backup script with configurable retention policies. |
+| [`backup-db.ps1`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/backup-db.ps1) | Automated PostgreSQL `pg_dump` backup script with configurable retention policies and `-RunDrill` mode. |
+| [`restore-drill.ps1`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/restore-drill.ps1) | Automated database restore drill into scratch DB with SHA-256 validation, table integrity tests, and history tracking. |
 | [`endpointguard-backup-task.xml`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/endpointguard-backup-task.xml) | Windows Task Scheduler XML definition for scheduled nightly backups. |
+| [`endpointguard-restore-drill-task.xml`](file:///C:/Users/TEST/ZeroAgent%20Scan/deploy/endpointguard-restore-drill-task.xml) | Windows Task Scheduler XML definition for quarterly automated restore drills. |
 
 ---
 
@@ -46,15 +48,28 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 .\configure-tls.ps1
 ```
 
-### Step 5: Register Scheduled Backup Task in Windows Task Scheduler
+### Step 5: Register Scheduled Tasks in Windows Task Scheduler
 ```powershell
+# 1. Nightly Database Backups (02:00 AM Daily)
 Register-ScheduledTask -Xml (Get-Content -Raw .\endpointguard-backup-task.xml) -TaskName "ZeroAgent-DatabaseBackup" -Force
+
+# 2. Quarterly Restore Drills & Integrity Checks (03:00 AM on 1st of Jan/Apr/Jul/Oct)
+Register-ScheduledTask -Xml (Get-Content -Raw .\endpointguard-restore-drill-task.xml) -TaskName "ZeroAgent-DatabaseRestoreDrill" -Force
 ```
 
-### Step 6: Deploying Application Updates
+### Step 6: On-Demand Backup & Restore Drill Verification
+```powershell
+# Take a backup and immediately verify it end-to-end in a scratch database:
+.\backup-db.ps1 -RunDrill
+
+# Or execute a standalone restore drill on the latest backup:
+.\restore-drill.ps1
+```
+
+### Step 7: Deploying Application Updates
 When rolling out a new version:
 ```powershell
-.\deploy-update.ps1 -ArtifactZip "C:\releases\zeroagent-v1.1.0.zip"
+.\deploy-update.ps1 -ArtifactZip "C:\releases\zeroagent-v1.2.0.zip"
 ```
 
 ---
@@ -65,3 +80,5 @@ All deployment and maintenance scripts write structured logs to `C:\apps\zeroage
 - `configure_tls_YYYYMMDD_HHMMSS.log`: Registry SCHANNEL changes and SSL bindings.
 - `update_YYYYMMDD_HHMMSS.log`: Application updates, migration runs, and health checks.
 - `backup_YYYYMMDD_HHMMSS.log`: Nightly database dumps and retention purges.
+- `restore_drill_YYYYMMDD_HHMMSS.log`: Database restore drill execution and integrity check results.
+- `D:\backups\zeroagent\restore_drill_history.json`: Machine-readable audit paper trail of all drill runs.

@@ -45,5 +45,12 @@
     "daily_retention_days": 30,
     "weekly_retention_weeks": 12,
     "schedule_time": "02:00"
+  },
+  "restore_drill": {
+    "scratch_database_name": "zeroagent_restore_scratch",
+    "quarterly_schedule": "Quarterly on the 1st at 03:00",
+    "notify_webhook_url": "https://hooks.slack.com/services/BACKUP_AUDIT_NOTIFICATIONS",
+    "notify_email": "secops-backups@endpointguard.local",
+    "history_log_path": "D:\\backups\\zeroagent\\restore_drill_history.json"
   }
 }

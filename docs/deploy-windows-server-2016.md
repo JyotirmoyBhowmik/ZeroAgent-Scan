@@ -134,16 +134,19 @@ Submit the outbound WinRM/DCOM rule as a formal change request to your network/f
 - Use Windows Task Scheduler (not an in-process cron-like library alone) to trigger the nightly/staggered fleet scan via a call to the app's own scan-trigger API, so scan scheduling survives independently of the app process staying up continuously.
 - Stagger by subnet as recommended in the earlier scale-hardening prompt — don't fire all 400 at 2:00 AM sharp.
 
-### 9. Backup & Monitoring
-- Schedule `pg_dump` nightly via Task Scheduler, retained per your compliance policy (commonly 30 daily + 12 monthly).
-- Point Windows Server's built-in Performance Monitor or your existing enterprise monitoring (SCOM, Zabbix, etc.) at the NSSM service and Postgres process, and at the app's `/health` endpoint.
-- Confirm Windows Event Log entries from the service are actually useful (not just "Node.exe exited") — this is where the structured logging from the earlier hardening prompt pays off.
+### 9. Backup, Automated Restore Drills & Monitoring
+- **Automated Nightly Backups**: Run `pg_dump` via `backup-db.ps1` at 02:00 AM, retained per compliance policy (30 daily + 12 weekly).
+- **Quarterly Automated Restore Drills**: Execute `restore-drill.ps1` via Task Scheduler (`endpointguard-restore-drill-task.xml`) quarterly (1st of Jan/Apr/Jul/Oct at 03:00 AM).
+  - Restores backup into throwaway scratch DB (`zeroagent_restore_scratch`), validates SHA-256 checksums, executes table integrity queries (`SELECT COUNT(*) FROM endpoints`, `host_snapshots`), logs results to `D:\backups\zeroagent\restore_drill_history.json`, and dispatches webhook/email audit notifications.
+  - Test on-demand at any time with `.\backup-db.ps1 -RunDrill` or `.\restore-drill.ps1`.
+- **Process & Health Monitoring**: Point Windows Server Performance Monitor or enterprise monitoring (SCOM, Datadog, Zabbix) at the NSSM services, Postgres engine, and the application `/health` and `/admin/health/status` endpoints.
 
 ### 10. Go-Live Checklist
-- [ ] All 10 production-hardening prompts from the previous pack applied and tested
+- [ ] All 10 production-hardening prompts applied and tested
 - [ ] Service account is least-privilege, not domain admin
 - [ ] TLS 1.2+ enforced, valid internal CA cert installed
-- [ ] Firewall change request approved and rules verified with a test scan against 2-3 pilot endpoints before the full ~400
-- [ ] Backup job tested with an actual restore, not just "the job ran"
-- [ ] Alerting wired to your team's actual notification channel (email/Teams/Slack), tested with a deliberate failure
-- [ ] Runbook handed to whoever's on call, including how to restart the NSSM service and where logs live
+- [ ] Firewall change request approved and verified with test scans against Pilot ring
+- [ ] Backup job tested with an automated scratch restore drill (`.\restore-drill.ps1`), producing a passing audit record
+- [ ] Human alerting verified via "Send Test Alert" in `/admin` with live webhook/email delivery confirmation
+- [ ] Quarterly restore drill Task Scheduler job registered (`ZeroAgent-DatabaseRestoreDrill`)
+- [ ] Runbook handed to whoever is on call, including service restart commands and log locations
