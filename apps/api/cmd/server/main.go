@@ -146,6 +146,7 @@ func main() {
 			// Endpoints & Hardware Inventory
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/endpoints", apiHandler.ListEndpoints)
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/endpoints/{id}", apiHandler.GetEndpointByID)
+			protected.With(auth.RequirePermission(auth.PermissionManageTenants), auth.RequireStepUp()).Delete("/endpoints/{id}", apiHandler.DeleteEndpoint)
 
 			// Keyset Paginated Snapshots
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/snapshots", apiHandler.ListSnapshots)
@@ -178,6 +179,7 @@ func main() {
 			protected.With(auth.RequirePermission(auth.PermissionReadCompliance)).Get("/compliance/frameworks/{code}/rules", apiHandler.ListComplianceRules)
 			protected.With(auth.RequirePermission(auth.PermissionReadCompliance)).Get("/compliance/hosts/{host_id}/results", apiHandler.GetHostComplianceResults)
 			protected.With(auth.RequirePermission(auth.PermissionReadCompliance)).Get("/compliance/tenant/summary", apiHandler.GetTenantComplianceSummary)
+			protected.With(auth.RequirePermission(auth.PermissionManageCredentials), auth.RequireStepUp()).Post("/compliance/policies/{id}/disable", apiHandler.DisablePolicyEnforcement)
 
 			// Configuration Drift & Rule-Based Webhook Alerts
 			protected.With(auth.RequirePermission(auth.PermissionReadDrift)).Get("/drift/events", apiHandler.ListDriftEvents)

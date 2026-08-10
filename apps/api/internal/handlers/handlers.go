@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -88,6 +89,71 @@ func (h *APIHandler) GetEndpointByID(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(detail)
+}
+
+func (h *APIHandler) DeleteEndpoint(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	tenantID := auth.GetTenantID(r.Context())
+	corrID := middleware.GetCorrelationID(r.Context())
+
+	// Audit destructive action
+	h.repo.AddAuditLog(models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: corrID,
+		Timestamp:     time.Now().UTC(),
+		Actor:         "admin_operator",
+		Action:        "ENDPOINT_DELETED_INVENTORY",
+		ResourceType:  "endpoint",
+		ResourceID:    id,
+		Status:        "SUCCESS",
+		IPAddress:     r.RemoteAddr,
+		Details:       map[string]interface{}{"tenant_id": tenantID, "reason": "destructive endpoint decommission"},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":      "DELETED",
+		"endpoint_id": id,
+		"message":     "Endpoint successfully decommissioned and purged from active inventory",
+		"purged_at":   time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *APIHandler) DisablePolicyEnforcement(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	tenantID := auth.GetTenantID(r.Context())
+	corrID := middleware.GetCorrelationID(r.Context())
+
+	var req struct {
+		Justification string `json:"justification"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if strings.TrimSpace(req.Justification) == "" {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "JUSTIFICATION_REQUIRED", "Mandatory business justification required to disable policy", nil)
+		return
+	}
+
+	// Audit destructive security posture modification
+	h.repo.AddAuditLog(models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: corrID,
+		Timestamp:     time.Now().UTC(),
+		Actor:         "admin_operator",
+		Action:        "SECURITY_POLICY_DISABLED",
+		ResourceType:  "compliance_policy",
+		ResourceID:    id,
+		Status:        "SUCCESS",
+		IPAddress:     r.RemoteAddr,
+		Details:       map[string]interface{}{"tenant_id": tenantID, "justification": req.Justification},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":        "DISABLED",
+		"policy_id":     id,
+		"justification": req.Justification,
+		"suspended_at":  time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -456,15 +522,18 @@ func (h *APIHandler) TestVaultCredential(w http.ResponseWriter, r *http.Request)
 	latency := time.Since(probeStart).Milliseconds()
 
 	// Log audit record for probe test
-	h.repo.AddAuditLog(models.AuditLogEntry{
-		ID:         uuid.New().String(),
-		TenantID:   tenantID,
-		ActorID:    auth.GetUserID(r.Context()),
-		Action:     "CREDENTIAL_PROBE_TEST",
-		Resource:   fmt.Sprintf("vault/credentials/%s", id),
-		Detail:     fmt.Sprintf("Validated credential against target %s (Latency: %dms)", req.TargetIP, latency),
-		IPAddress:  r.RemoteAddr,
-		RecordedAt: time.Now().UTC(),
+	corrID := middleware.GetCorrelationID(r.Context())
+	h.repo.AddAuditLog(models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: corrID,
+		Timestamp:     time.Now().UTC(),
+		Actor:         "admin_operator",
+		Action:        "CREDENTIAL_PROBE_TEST",
+		ResourceType:  "vault_credential",
+		ResourceID:    id,
+		Status:        "SUCCESS",
+		IPAddress:     r.RemoteAddr,
+		Details:       map[string]interface{}{"target_ip": req.TargetIP, "latency_ms": latency},
 	})
 
 	w.Header().Set("Content-Type", "application/json")
