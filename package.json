@@ -1,0 +1,14 @@
+{
+  "name": "zeroagent-scan-workspace",
+  "version": "1.2.0",
+  "private": true,
+  "description": "ZeroAgent-Scan / EndpointGuard EMS Enterprise Workspace",
+  "scripts": {
+    "dev": "docker compose -f docker-compose.dev.yml up",
+    "dev:build": "docker compose -f docker-compose.dev.yml up --build",
+    "dev:down": "docker compose -f docker-compose.dev.yml down -v",
+    "seed:dev": "go run scripts/seed_dev.go",
+    "build": "cd apps/dashboard && pnpm build",
+    "test:api": "go test -v ./apps/api/..."
+  }
+}

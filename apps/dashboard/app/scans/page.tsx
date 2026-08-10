@@ -1,10 +1,34 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Radar, Terminal, Play, CheckCircle2, Clock, AlertTriangle, Shield, RefreshCw } from "lucide-react";
+import {
+  Radar,
+  Terminal,
+  Play,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Shield,
+  RefreshCw,
+  Search,
+  KeyRound,
+  Cpu,
+  Lock,
+  Layers,
+  Database,
+} from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { api } from "@/lib/api";
 import { ScanJob, CollectorGateway, VaultCredentialSummary } from "@/lib/types";
+
+const STAGES = [
+  { id: 1, label: "Discovery", tag: "DISCOVERY", icon: Search },
+  { id: 2, label: "Handshake", tag: "HANDSHAKE", icon: KeyRound },
+  { id: 3, label: "Hardware Audit", tag: "HARDWARE", icon: Cpu },
+  { id: 4, label: "Security Posture", tag: "SECURITY", icon: Lock },
+  { id: 5, label: "Inventory Indexing", tag: "INDEXING", icon: Layers },
+  { id: 6, label: "DB Commit", tag: "COMMIT", icon: Database },
+];
 
 export default function ScansPage() {
   const [scans, setScans] = useState<ScanJob[]>([]);
@@ -13,16 +37,16 @@ export default function ScansPage() {
   const [selectedScan, setSelectedScan] = useState<ScanJob | null>(null);
 
   // New Scan Form State
-  const [name, setName] = useState("Corporate Subnet A - Daily Audit");
-  const [targetCIDR, setTargetCIDR] = useState("10.100.1.0/24");
+  const [name, setName] = useState("RFC 5737 Pilot Ring - Daily WMI/CIM Audit");
+  const [targetCIDR, setTargetCIDR] = useState("192.0.2.0/24");
   const [scanProfile, setScanProfile] = useState("full_hardware_os");
   const [protocol, setProtocol] = useState("winrm_https");
   const [vaultRef, setVaultRef] = useState("sec_ref_winrm_domain_prod_01");
   const [gatewayId, setGatewayId] = useState("gw-10-100-1-0");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    async function load() {
+  const loadData = async () => {
+    try {
       const [s, g, c] = await Promise.all([
         api.getScans(),
         api.getGateways(),
@@ -31,12 +55,30 @@ export default function ScansPage() {
       setScans(s);
       setGateways(g);
       setCredentials(c);
-      if (s.length > 0) {
+      if (s.length > 0 && !selectedScan) {
         setSelectedScan(s[0]);
+      } else if (selectedScan) {
+        const updated = s.find((item) => item.id === selectedScan.id);
+        if (updated) setSelectedScan(updated);
       }
-    }
-    load();
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
+
+  // Poll active scans every 1.5s while any scan is running
+  useEffect(() => {
+    const hasRunning = scans.some((s) => s.status === "running") || selectedScan?.status === "running";
+    if (!hasRunning) return;
+
+    const timer = setInterval(() => {
+      loadData();
+    }, 1500);
+
+    return () => clearInterval(timer);
+  }, [scans, selectedScan?.status]);
 
   const handleLaunchScan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +99,23 @@ export default function ScansPage() {
     }
   };
 
+  const getActiveStageIndex = (logs: string[] = []): number => {
+    if (!selectedScan) return 0;
+    if (selectedScan.status === "completed") return 6;
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const line = logs[i];
+      if (line.includes("[COMMIT]")) return 6;
+      if (line.includes("[INDEXING]")) return 5;
+      if (line.includes("[SECURITY]")) return 4;
+      if (line.includes("[HARDWARE]")) return 3;
+      if (line.includes("[HANDSHAKE]")) return 2;
+      if (line.includes("[DISCOVERY]")) return 1;
+    }
+    return 1;
+  };
+
+  const currentStage = getActiveStageIndex(selectedScan?.logs);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -65,6 +124,65 @@ export default function ScansPage() {
         <p className="text-sm text-charcoal-600 mt-1">
           Launch and stream real-time agentless WMI/CIM scans via remote WinRM HTTPS across enterprise subnets.
         </p>
+      </div>
+
+      {/* 6-Stage Scan Pipeline Visualizer */}
+      <div className="bg-white rounded-xl border border-charcoal-200 p-4 shadow-xs">
+        <div className="flex items-center justify-between mb-3 border-b border-charcoal-100 pb-2">
+          <div className="flex items-center gap-2">
+            <Radar className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs font-bold text-charcoal-900 uppercase tracking-wider">
+              6-Stage Agentless Execution Pipeline
+            </span>
+          </div>
+          {selectedScan && (
+            <span className="text-[11px] font-mono text-charcoal-600">
+              Job: <strong>{selectedScan.name}</strong> • Status:{" "}
+              <span className={`font-bold uppercase ${selectedScan.status === "completed" ? "text-emerald-700" : "text-blue-700"}`}>
+                {selectedScan.status}
+              </span>
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+          {STAGES.map((stage) => {
+            const Icon = stage.icon;
+            const isCompleted = selectedScan?.status === "completed" || currentStage > stage.id;
+            const isCurrent = selectedScan?.status === "running" && currentStage === stage.id;
+
+            return (
+              <div
+                key={stage.id}
+                className={`p-2.5 rounded-lg border text-xs flex items-center gap-2.5 transition-all ${
+                  isCompleted
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+                    : isCurrent
+                    ? "bg-blue-50 border-blue-400 text-blue-950 ring-2 ring-blue-500/20 animate-pulse"
+                    : "bg-charcoal-50 border-charcoal-200 text-charcoal-500 opacity-60"
+                }`}
+              >
+                <div
+                  className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
+                    isCompleted
+                      ? "bg-emerald-200 text-emerald-900 font-bold"
+                      : isCurrent
+                      ? "bg-blue-200 text-blue-900 font-bold"
+                      : "bg-charcoal-200 text-charcoal-700"
+                  }`}
+                >
+                  {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-mono font-bold block opacity-75">
+                    Stage {stage.id}
+                  </span>
+                  <span className="font-semibold text-[11px] block truncate">{stage.label}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -93,7 +211,7 @@ export default function ScansPage() {
                 type="text"
                 value={targetCIDR}
                 onChange={(e) => setTargetCIDR(e.target.value)}
-                placeholder="10.100.1.0/24"
+                placeholder="192.0.2.0/24"
                 required
                 className="w-full px-3 py-2 bg-charcoal-50 border border-charcoal-200 rounded-lg font-mono text-charcoal-900 focus:ring-2 focus:ring-charcoal-950 focus:outline-none"
               />
@@ -136,11 +254,15 @@ export default function ScansPage() {
                 onChange={(e) => setVaultRef(e.target.value)}
                 className="w-full px-3 py-2 bg-charcoal-50 border border-charcoal-200 rounded-lg text-charcoal-900 focus:ring-2 focus:ring-charcoal-950 focus:outline-none font-mono text-[11px]"
               >
-                {credentials.map((c) => (
-                  <option key={c.id} value={c.opaque_id}>
-                    {c.name} ({c.opaque_id})
-                  </option>
-                ))}
+                {credentials.length > 0 ? (
+                  credentials.map((c) => (
+                    <option key={c.id} value={c.opaque_id}>
+                      {c.name} ({c.opaque_id})
+                    </option>
+                  ))
+                ) : (
+                  <option value="sec_ref_winrm_domain_prod_01">Active Directory WinRM (sec_ref_winrm_domain_prod_01)</option>
+                )}
               </select>
             </div>
 
@@ -151,11 +273,15 @@ export default function ScansPage() {
                 onChange={(e) => setGatewayId(e.target.value)}
                 className="w-full px-3 py-2 bg-charcoal-50 border border-charcoal-200 rounded-lg text-charcoal-900 focus:ring-2 focus:ring-charcoal-950 focus:outline-none"
               >
-                {gateways.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} ({g.subnet_cidr})
-                  </option>
-                ))}
+                {gateways.length > 0 ? (
+                  gateways.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.subnet_cidr})
+                    </option>
+                  ))
+                ) : (
+                  <option value="gw-subnet-192-0-2-0">Primary Collector Gateway (192.0.2.0/24)</option>
+                )}
               </select>
             </div>
 
@@ -182,9 +308,14 @@ export default function ScansPage() {
                 </span>
               </div>
               {selectedScan && (
-                <Badge variant={selectedScan.status === "completed" ? "success" : "info"} size="sm">
-                  {selectedScan.status.toUpperCase()}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-charcoal-400">
+                    {selectedScan.scanned_hosts}/{selectedScan.total_hosts} Scanned
+                  </span>
+                  <Badge variant={selectedScan.status === "completed" ? "success" : "info"} size="sm">
+                    {selectedScan.status.toUpperCase()}
+                  </Badge>
+                </div>
               )}
             </div>
 
@@ -193,7 +324,27 @@ export default function ScansPage() {
                 selectedScan.logs.map((line, idx) => (
                   <div key={idx} className="flex gap-2">
                     <span className="text-charcoal-600 select-none">{String(idx + 1).padStart(2, "0")}</span>
-                    <span className={line.includes("[ERROR]") ? "text-red-400" : line.includes("completed") ? "text-emerald-400 font-semibold" : "text-charcoal-300"}>
+                    <span
+                      className={
+                        line.includes("[ERROR]")
+                          ? "text-red-400"
+                          : line.includes("COMPLETED") || line.includes("completed")
+                          ? "text-emerald-400 font-semibold"
+                          : line.includes("[DISCOVERY]")
+                          ? "text-blue-300"
+                          : line.includes("[HANDSHAKE]")
+                          ? "text-purple-300"
+                          : line.includes("[HARDWARE]")
+                          ? "text-amber-300"
+                          : line.includes("[SECURITY]")
+                          ? "text-rose-300"
+                          : line.includes("[INDEXING]")
+                          ? "text-cyan-300"
+                          : line.includes("[COMMIT]")
+                          ? "text-emerald-300"
+                          : "text-charcoal-300"
+                      }
+                    >
                       {line}
                     </span>
                   </div>

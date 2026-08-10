@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -955,21 +956,101 @@ func (r *Repository) CreateScanJob(req models.CreateScanJobRequest) *models.Scan
 		VaultSecretRef: req.VaultSecretRef,
 		GatewayID:      req.GatewayID,
 		Status:         "running",
-		TotalHosts:     16,
+		TotalHosts:     8,
 		ScannedHosts:   0,
 		CompliantHosts: 0,
 		FailedHosts:    0,
 		Logs: []string{
-			fmt.Sprintf("[%s] [INFO] Scan initiated for target %s using %s protocol", now.Format(time.RFC3339), req.TargetCIDR, req.Protocol),
-			fmt.Sprintf("[%s] [INFO] Dispatching task to Collector Gateway %s", now.Format(time.RFC3339), req.GatewayID),
-			fmt.Sprintf("[%s] [INFO] Target hosts WS-Man handshake established. Scanning WMI/CIM classes...", now.Add(1*time.Second).Format(time.RFC3339)),
+			fmt.Sprintf("[%s] [DISCOVERY] Scan job '%s' queued for target %s using %s protocol", now.Format(time.RFC3339), req.Name, req.TargetCIDR, req.Protocol),
+			fmt.Sprintf("[%s] [DISCOVERY] Dispatching task to Collector Gateway %s", now.Format(time.RFC3339), req.GatewayID),
 		},
 		StartedAt: &now,
 		CreatedAt: now,
 	}
 
 	r.scans[id] = job
+
+	// Launch async 6-stage simulation in mock/dev mode
+	isMock := os.Getenv("MOCK_SCAN_MODE") == "true" || os.Getenv("ENVIRONMENT") == "development" || os.Getenv("ENVIRONMENT") == ""
+	if isMock {
+		go r.runMockScanSimulation(id, req.TargetCIDR, req.Protocol)
+	}
+
 	return job
+}
+
+func (r *Repository) runMockScanSimulation(jobID string, targetCIDR string, protocol string) {
+	stages := []struct {
+		delay     time.Duration
+		log       string
+		scanned   int
+		compliant int
+		failed    int
+	}{
+		{
+			delay:     1200 * time.Millisecond,
+			log:       fmt.Sprintf("[DISCOVERY] Initiating ICMP echo and ARP subnet sweep on %s... Discovered 8 responsive target hosts.", targetCIDR),
+			scanned:   2,
+			compliant: 2,
+			failed:    0,
+		},
+		{
+			delay:     1500 * time.Millisecond,
+			log:       fmt.Sprintf("[HANDSHAKE] WinRM HTTPS (5986) TLS 1.2+ mutual handshake established with SPN HTTP/DEMO-WKS-001 using %s.", protocol),
+			scanned:   4,
+			compliant: 4,
+			failed:    0,
+		},
+		{
+			delay:     1800 * time.Millisecond,
+			log:       "[HARDWARE] Querying Win32_ComputerSystem, Win32_Processor, Win32_PhysicalMemory, Win32_DiskDrive, Win32_BIOS... 16 Cores, 32GB RAM, TPM 2.0 active.",
+			scanned:   6,
+			compliant: 5,
+			failed:    1,
+		},
+		{
+			delay:     1800 * time.Millisecond,
+			log:       "[SECURITY] Inspecting BitLocker (Win32_EncryptableVolume), Defender AV engine (v4.18.24040.4), Secure Boot (UEFI), and active Firewall profiles.",
+			scanned:   7,
+			compliant: 6,
+			failed:    1,
+		},
+		{
+			delay:     1600 * time.Millisecond,
+			log:       "[INDEXING] Correlating installed applications (Win32_Product / Registry), hotfix packages (KB5034441), and NIST NVD / CISA KEV vulnerability feeds.",
+			scanned:   8,
+			compliant: 7,
+			failed:    1,
+		},
+		{
+			delay:     1200 * time.Millisecond,
+			log:       "[COMMIT] JSONB telemetry snapshot stored to PostgreSQL (SHA-256 verified). Drift analysis & CIS Benchmark scoring complete. Scan job COMPLETED.",
+			scanned:   8,
+			compliant: 7,
+			failed:    1,
+		},
+	}
+
+	for i, s := range stages {
+		time.Sleep(s.delay)
+		r.mu.Lock()
+		job, ok := r.scans[jobID]
+		if !ok || job.Status == "cancelled" {
+			r.mu.Unlock()
+			return
+		}
+		ts := time.Now().UTC().Format(time.RFC3339)
+		job.Logs = append(job.Logs, fmt.Sprintf("[%s] %s", ts, s.log))
+		job.ScannedHosts = s.scanned
+		job.CompliantHosts = s.compliant
+		job.FailedHosts = s.failed
+		if i == len(stages)-1 {
+			job.Status = "completed"
+			now := time.Now().UTC()
+			job.CompletedAt = &now
+		}
+		r.mu.Unlock()
+	}
 }
 
 func (r *Repository) ListScanJobs() []models.ScanJob {

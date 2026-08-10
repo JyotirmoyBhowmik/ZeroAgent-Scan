@@ -73,6 +73,39 @@ func NewMemoryAuthRepository() *MemoryAuthRepository {
 	_ = repo.SaveUser(breakGlassUser)
 	_ = repo.SaveTOTPSecret("usr-break-glass-01", "JBSWY3DPEHPK3PXP") // standard test TOTP secret
 
+	// Pre-seed Development Demo Accounts for all 4 RBAC Roles
+	demoUsers := []struct {
+		id       string
+		username string
+		email    string
+		display  string
+		role     Role
+		password string
+	}{
+		{"usr-demo-admin-01", "admin", "admin@demo.local", "SecOps Administrator", RoleAdmin, "AdminDevPass2026!"},
+		{"usr-demo-oper-01", "operator", "operator@demo.local", "Tier 2 Scan Operator", RoleOperator, "OperatorDevPass2026!"},
+		{"usr-demo-audit-01", "auditor", "auditor@demo.local", "SOC Compliance Auditor", RoleAuditor, "AuditorDevPass2026!"},
+		{"usr-demo-view-01", "viewer", "viewer@demo.local", "Security Viewer", RoleViewer, "ViewerDevPass2026!"},
+	}
+
+	for _, d := range demoUsers {
+		u := User{
+			ID:           d.id,
+			TenantID:     "tenant-default-01",
+			Username:     d.username,
+			Email:        d.email,
+			DisplayName:  d.display,
+			Role:         d.role,
+			IsActive:     true,
+			IsBreakGlass: false,
+			TOTPEnabled:  false,
+			PasswordHash: HashPassword(d.password, d.id),
+			CreatedAt:    time.Now().UTC(),
+			UpdatedAt:    time.Now().UTC(),
+		}
+		_ = repo.SaveUser(u)
+	}
+
 	return repo
 }
 
@@ -94,7 +127,7 @@ func (r *MemoryAuthRepository) GetUserByUsername(tenantID, username string) (*Us
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, u := range r.users {
-		if u.Username == username && (tenantID == "" || u.TenantID == tenantID) {
+		if (u.Username == username || u.Email == username) && (tenantID == "" || u.TenantID == tenantID) {
 			return u, true
 		}
 	}
