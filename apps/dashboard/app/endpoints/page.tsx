@@ -22,6 +22,7 @@ import {
   FolderTree,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { api } from "@/lib/api";
 import { Endpoint, PilotHealthSummary, RolloutTier, PromoteTierRequest } from "@/lib/types";
 
@@ -287,12 +288,22 @@ export default function EndpointsPage() {
             <thead>
               <tr className="bg-charcoal-50/70 border-b border-charcoal-200 text-charcoal-600 uppercase tracking-wider font-semibold">
                 <th className="py-3.5 px-6">Endpoint / Hostname</th>
-                <th className="py-3.5 px-4">Rollout Tier</th>
+                <th className="py-3.5 px-4">
+                  <div className="inline-flex items-center gap-1.5">
+                    <span>Rollout Tier</span>
+                    <InfoTooltip fieldId="endpoint.rollout_tier" />
+                  </div>
+                </th>
                 <th className="py-3.5 px-4">Active Directory OU & Subnet</th>
                 <th className="py-3.5 px-4">Network & Protocol</th>
                 <th className="py-3.5 px-4">Operating System</th>
                 <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4 text-right">Compliance</th>
+                <th className="py-3.5 px-4 text-right">
+                  <div className="inline-flex items-center justify-end gap-1.5">
+                    <span>Compliance</span>
+                    <InfoTooltip fieldId="endpoint.compliance_score" />
+                  </div>
+                </th>
                 <th className="py-3.5 px-6 text-right">Action</th>
               </tr>
             </thead>

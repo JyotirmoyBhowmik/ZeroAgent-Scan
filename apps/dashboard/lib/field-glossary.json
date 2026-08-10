@@ -1,0 +1,128 @@
+{
+  "scan.target_cidr": {
+    "title": "Target Subnet CIDR / Host IP",
+    "description": "The IPv4 network subnet in CIDR notation or single host IP to be scanned over WinRM.",
+    "format": "x.x.x.x/yy (Subnet) or x.x.x.x (Single Host)",
+    "example": "192.0.2.0/24 or 192.0.2.10/32"
+  },
+  "scan.protocol": {
+    "title": "Agentless Protocol",
+    "description": "Transport protocol and remote management standard used by the collector gateway.",
+    "format": "winrm_https | winrm_http | wmi_dcom | snmp_v3 | ssh_bmc",
+    "example": "WinRM over HTTPS (Port 5986 - Recommended)"
+  },
+  "scan.profile": {
+    "title": "Scan Profile",
+    "description": "Determines the depth of WMI/CIM queries and CIS benchmark compliance rules evaluated during the scan.",
+    "format": "full_hardware_os | rapid_inventory | cis_level_1 | critical_patches",
+    "example": "Full Hardware & CIS Benchmark Audit"
+  },
+  "scan.vault_secret_ref": {
+    "title": "Credential Vault Reference",
+    "description": "Opaque identifier referencing encrypted credentials in the AES-256-GCM Vault Manager.",
+    "format": "sec_ref_[service]_[tenant]_[index]",
+    "example": "sec_ref_winrm_domain_prod_01"
+  },
+  "scan.gateway_id": {
+    "title": "Collector Gateway",
+    "description": "The local subnet collector gateway daemon executing the remote WinRM queries via mutual TLS.",
+    "format": "gw-[subnet-descriptor]",
+    "example": "gw-subnet-192-0-2-0"
+  },
+  "admin.rollout_tier_pilot": {
+    "title": "Pilot Ring (Canary Tier)",
+    "description": "When ON, scheduled scans include canary test machines (first 2-5% of fleet). When OFF, pilot ring is bypassed.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled for initial patch testing and auth verification"
+  },
+  "admin.rollout_tier_staged": {
+    "title": "Staged Ring (Departmental Tier)",
+    "description": "When ON, scheduled scans include secondary departmental endpoints (~25% of fleet). When OFF, staged tier is skipped.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled after 48h error-free pilot validation"
+  },
+  "admin.rollout_tier_full": {
+    "title": "Full Fleet Ring (100% Production)",
+    "description": "When ON, scheduled scans sweep all 400 production endpoints. When OFF, production fleet is protected from automated sweeps.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled only after operator sign-off and pilot audit"
+  },
+  "admin.retention_strategy": {
+    "title": "Snapshot Retention Strategy",
+    "description": "Specifies whether old JSONB host snapshots are exported to compressed gzip cold-storage or downsampled to weekly snapshots.",
+    "format": "archive (Compressed GZIP on disk) | downsample (Keep 1 weekly)",
+    "example": "archive (Recommended for compliance preservation)"
+  },
+  "admin.retention_window": {
+    "title": "Retention Window (Days)",
+    "description": "Number of days full-resolution daily introspection snapshots are retained in PostgreSQL before archival/downsampling.",
+    "format": "Positive Integer (30 - 365)",
+    "example": "90 Days"
+  },
+  "admin.test_alert_url": {
+    "title": "Target Webhook URL",
+    "description": "Destination HTTPS endpoint for synthetic alerting verification (Slack, Microsoft Teams, PagerDuty, Splunk).",
+    "format": "HTTPS URL",
+    "example": "https://hooks.slack.com/services/T0000/B000/XXXXX"
+  },
+  "admin.bulk_tier_target": {
+    "title": "Target Rollout Tier",
+    "description": "The destination tier (pilot, staged, or full) to assign selected endpoints to.",
+    "format": "pilot | staged | full",
+    "example": "staged"
+  },
+  "admin.bulk_tier_justification": {
+    "title": "Operator Justification Note",
+    "description": "Mandatory rationale recorded into the OWASP ASVS immutable security audit log.",
+    "format": "String (10-255 characters)",
+    "example": "Subnet 198.51.100.0/24 promoted after 0 authentication lockouts"
+  },
+  "endpoint.rollout_tier": {
+    "title": "Rollout Tier",
+    "description": "Operational deployment ring controlling whether scheduled scan sweeps target this host.",
+    "format": "pilot (Canary) | staged (Phase 2) | full (All Fleet)",
+    "example": "pilot"
+  },
+  "endpoint.compliance_score": {
+    "title": "CIS Compliance Score",
+    "description": "Percentage of evaluated CIS Benchmark and NIST SP 800-53 security controls passed by this endpoint.",
+    "format": "Percentage (0.0% - 100.0%)",
+    "example": "98.5%"
+  },
+  "endpoint.bitlocker": {
+    "title": "BitLocker Encryption State",
+    "description": "Volume encryption and key protector status reported by Win32_EncryptableVolume.",
+    "format": "FullyEncrypted | ProtectionOff | EncryptionInProgress",
+    "example": "FullyEncrypted (AES-XTS 256)"
+  },
+  "endpoint.defender": {
+    "title": "Microsoft Defender AV Engine",
+    "description": "Real-time protection state, cloud protection, and signature definition update freshness.",
+    "format": "ActiveAndUpdated | SignaturesOutOfDate | Disabled",
+    "example": "ActiveAndUpdated (Engine: 1.1.24030.4)"
+  },
+  "endpoint.tpm": {
+    "title": "TPM 2.0 Attestation",
+    "description": "Hardware security chip presence, spec version, and PCR measurement status.",
+    "format": "Present (v2.0) | NotPresent | DisabledInBIOS",
+    "example": "TPM 2.0 (Infineon IFX, Status: Active)"
+  },
+  "report.ttl_hours": {
+    "title": "Shareable Link TTL (Hours)",
+    "description": "Time-To-Live duration before the cryptographic share link token expires and becomes inaccessible.",
+    "format": "Integer Hours (1 - 168)",
+    "example": "24 Hours"
+  },
+  "report.type": {
+    "title": "Audit Report Type",
+    "description": "Focus of the report: executive fleet metrics, regulatory CIS/NIST audit, or vulnerability posture.",
+    "format": "EXECUTIVE_SUMMARY | COMPLIANCE_AUDIT | VULNERABILITY_POSTURE",
+    "example": "COMPLIANCE_AUDIT"
+  },
+  "gateway.fingerprint": {
+    "title": "mTLS Certificate Fingerprint",
+    "description": "Cryptographic SHA-256 fingerprint of the client certificate presented during mTLS 1.3 handshake.",
+    "format": "SHA256:[64 Hex Chars]",
+    "example": "SHA256:4a8f9b2c3d1e5a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b"
+  }
+}

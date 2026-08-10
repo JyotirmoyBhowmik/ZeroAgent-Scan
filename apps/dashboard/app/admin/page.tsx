@@ -33,6 +33,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import {
   RolloutSettings,
   BulkAssignTierRequest,
@@ -402,11 +403,14 @@ export default function AdminSettingsPage() {
         </div>
 
         <form onSubmit={handleSavePolicy} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Strategy Selection */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-charcoal-700 uppercase tracking-wider">
-              Retention Strategy
-            </label>
+          {/* Policy Strategy Selection */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <label className="text-xs font-bold text-charcoal-700 uppercase tracking-wider">
+                Snapshot Retention Strategy
+              </label>
+              <InfoTooltip fieldId="admin.retention_strategy" />
+            </div>
             <div className="space-y-2">
               <label
                 className={`p-3 border rounded-lg flex items-start gap-3 cursor-pointer transition-colors ${
@@ -463,9 +467,12 @@ export default function AdminSettingsPage() {
           {/* Retention Window & Storage Path */}
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-charcoal-700 uppercase tracking-wider mb-1">
-                Full-Resolution Retention Window
-              </label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="text-xs font-bold text-charcoal-700 uppercase tracking-wider">
+                  Full-Resolution Retention Window
+                </label>
+                <InfoTooltip fieldId="admin.retention_window" />
+              </div>
               <div className="flex items-center gap-3">
                 <input
                   type="number"
@@ -609,7 +616,10 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-charcoal-800 mb-1">Target Webhook Endpoint URL</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="font-semibold text-charcoal-800">Target Webhook Endpoint URL</label>
+                <InfoTooltip fieldId="admin.test_alert_url" />
+              </div>
               <input
                 type="url"
                 required
@@ -703,7 +713,10 @@ export default function AdminSettingsPage() {
                 }`}
               >
                 <div>
-                  <span className="font-bold text-charcoal-900 block">Pilot Ring (5-10%)</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-charcoal-900">Pilot Ring (5-10%)</span>
+                    <InfoTooltip fieldId="admin.rollout_tier_pilot" />
+                  </div>
                   <span className="text-[11px] text-charcoal-600">Canary endpoints, test labs, and pilot workstations.</span>
                 </div>
                 <input
@@ -723,7 +736,10 @@ export default function AdminSettingsPage() {
                 }`}
               >
                 <div>
-                  <span className="font-bold text-charcoal-900 block">Staged Ring (25-50%)</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-charcoal-900">Staged Ring (25-50%)</span>
+                    <InfoTooltip fieldId="admin.rollout_tier_staged" />
+                  </div>
                   <span className="text-[11px] text-charcoal-600">Secondary wave departmental endpoints and non-critical workloads.</span>
                 </div>
                 <input
@@ -743,7 +759,10 @@ export default function AdminSettingsPage() {
                 }`}
               >
                 <div>
-                  <span className="font-bold text-charcoal-900 block">Full Fleet (100%)</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-charcoal-900">Full Fleet (100%)</span>
+                    <InfoTooltip fieldId="admin.rollout_tier_full" />
+                  </div>
                   <span className="text-[11px] text-charcoal-600">Complete fleet of ~400 production endpoints and servers.</span>
                 </div>
                 <input
@@ -792,7 +811,10 @@ export default function AdminSettingsPage() {
           <form onSubmit={handleBulkAssign} className="space-y-4 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block font-semibold text-charcoal-800 mb-1">Target Rollout Tier</label>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <label className="font-semibold text-charcoal-800">Target Rollout Tier</label>
+                  <InfoTooltip fieldId="admin.bulk_tier_target" />
+                </div>
                 <select
                   value={bulkTier}
                   onChange={(e: any) => setBulkTier(e.target.value)}
@@ -852,9 +874,12 @@ export default function AdminSettingsPage() {
             )}
 
             <div>
-              <label className="block font-semibold text-charcoal-800 mb-1">
-                Operator Justification Note <span className="text-rose-600">*</span>
-              </label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="font-semibold text-charcoal-800">
+                  Operator Justification Note <span className="text-rose-600">*</span>
+                </label>
+                <InfoTooltip fieldId="admin.bulk_tier_justification" />
+              </div>
               <textarea
                 required
                 rows={2}

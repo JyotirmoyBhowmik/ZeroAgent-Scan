@@ -16,6 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { getReportConfigs, generateShareableReportLink, scheduleRecurringReport } from "@/lib/api";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { ReportConfig } from "@/lib/types";
 
 export default function ReportsPage() {
@@ -191,7 +192,10 @@ export default function ReportsPage() {
             </p>
 
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Expiration Window</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="text-xs text-slate-400">Expiration Window</label>
+                <InfoTooltip fieldId="report.ttl_hours" iconClassName="text-slate-400 hover:text-white hover:bg-slate-700" />
+              </div>
               <select
                 value={ttlHours}
                 onChange={(e) => {
@@ -274,7 +278,10 @@ export default function ReportsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Report Type</label>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <label className="text-xs text-slate-400">Report Type</label>
+                  <InfoTooltip fieldId="report.type" iconClassName="text-slate-400 hover:text-white hover:bg-slate-700" />
+                </div>
                 <select
                   value={newType}
                   onChange={(e) => setNewType(e.target.value as any)}

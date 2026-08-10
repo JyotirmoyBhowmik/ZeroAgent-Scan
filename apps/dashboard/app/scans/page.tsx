@@ -18,6 +18,7 @@ import {
   Database,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { api } from "@/lib/api";
 import { ScanJob, CollectorGateway, VaultCredentialSummary } from "@/lib/types";
 
@@ -206,7 +207,10 @@ export default function ScansPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-charcoal-700 mb-1">Target Subnet CIDR / Host IP</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="font-semibold text-charcoal-700">Target Subnet CIDR / Host IP</label>
+                <InfoTooltip fieldId="scan.target_cidr" />
+              </div>
               <input
                 type="text"
                 value={targetCIDR}
@@ -219,7 +223,10 @@ export default function ScansPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-charcoal-700 mb-1">Agentless Protocol</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="font-semibold text-charcoal-700">Agentless Protocol</label>
+                <InfoTooltip fieldId="scan.protocol" />
+              </div>
               <select
                 value={protocol}
                 onChange={(e) => setProtocol(e.target.value)}
@@ -234,7 +241,10 @@ export default function ScansPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-charcoal-700 mb-1">Scan Profile</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="font-semibold text-charcoal-700">Scan Profile</label>
+                <InfoTooltip fieldId="scan.profile" />
+              </div>
               <select
                 value={scanProfile}
                 onChange={(e) => setScanProfile(e.target.value)}
@@ -248,7 +258,10 @@ export default function ScansPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-charcoal-700 mb-1">Credential Vault Reference</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="font-semibold text-charcoal-700">Credential Vault Reference</label>
+                <InfoTooltip fieldId="scan.vault_secret_ref" />
+              </div>
               <select
                 value={vaultRef}
                 onChange={(e) => setVaultRef(e.target.value)}
@@ -267,7 +280,10 @@ export default function ScansPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-charcoal-700 mb-1">Collector Gateway</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="font-semibold text-charcoal-700">Collector Gateway</label>
+                <InfoTooltip fieldId="scan.gateway_id" />
+              </div>
               <select
                 value={gatewayId}
                 onChange={(e) => setGatewayId(e.target.value)}

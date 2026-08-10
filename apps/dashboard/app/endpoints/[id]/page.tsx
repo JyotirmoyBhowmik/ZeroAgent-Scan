@@ -21,6 +21,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { getEndpointDetail, getHostSnapshots, getSnapshotDiff } from "@/lib/api";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { EndpointDetail, HostSnapshot, SnapshotDiffItem } from "@/lib/types";
 
 export default function HostDetailPage() {
@@ -145,8 +146,11 @@ export default function HostDetailPage() {
 
           <div className="flex items-center gap-4 text-xs">
             <div className="px-4 py-2 rounded-lg bg-slate-800/80 border border-slate-700/60 text-right">
-              <span className="text-slate-400 block text-[11px]">CIS Compliance</span>
-              <span className="text-base font-bold text-emerald-400">{endpoint.compliance_score.toFixed(1)}%</span>
+              <div className="flex items-center justify-end gap-1 text-slate-400 text-[11px]">
+                <span>CIS Compliance</span>
+                <InfoTooltip fieldId="endpoint.compliance_score" iconClassName="text-slate-400 hover:text-white hover:bg-slate-700" />
+              </div>
+              <span className="text-base font-bold text-emerald-400 block">{endpoint.compliance_score.toFixed(1)}%</span>
             </div>
             <div className="px-4 py-2 rounded-lg bg-slate-800/80 border border-slate-700/60 text-right">
               <span className="text-slate-400 block text-[11px]">Last Scanned</span>
@@ -229,30 +233,23 @@ export default function HostDetailPage() {
           {/* BIOS & TPM */}
           <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-4">
             <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-emerald-400" /> Firmware & Hardware Root-of-Trust
+              <Shield className="w-4 h-4 text-emerald-400" /> BIOS & TPM 2.0 Security
             </h2>
             <div className="space-y-3 text-xs divide-y divide-slate-800">
               <div className="flex justify-between pt-2">
-                <span className="text-slate-400">BIOS Version</span>
-                <span className="text-slate-100 font-mono font-medium">{hardware?.bios_details?.version || "1.15.2"}</span>
+                <span className="text-slate-400">BIOS Version / Date</span>
+                <span className="text-slate-100 font-medium">{hardware?.bios_details?.version || "1.14.0 (03/15/2024)"}</span>
               </div>
               <div className="flex justify-between pt-2">
-                <span className="text-slate-400">UEFI Secure Boot</span>
+                <span className="text-slate-400">Secure Boot State</span>
                 <span className="text-emerald-400 font-medium">Enabled (Active)</span>
               </div>
               <div className="flex justify-between pt-2">
-                <span className="text-slate-400">TPM 2.0 State</span>
-                <span className="text-emerald-400 font-medium">Present & Ready (Infineon)</span>
-              </div>
-              <div className="flex justify-between pt-2">
-                <span className="text-slate-400">SMBIOS Serial</span>
-                <span className="text-slate-100 font-mono">{endpoint.serial_number}</span>
-              </div>
-              <div className="flex justify-between pt-2">
-                <span className="text-slate-400">PCR 0 Integrity Hash</span>
-                <span className="text-slate-400 font-mono text-[10px] truncate max-w-[200px]">
-                  {hardware?.tpm_details?.pcr0_hash || "A8B7C6D5E4F3A2B10987654321..."}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">TPM 2.0 Security Processor</span>
+                  <InfoTooltip fieldId="endpoint.tpm" iconClassName="text-slate-400 hover:text-white hover:bg-slate-700" />
+                </div>
+                <span className="text-emerald-400 font-medium">Present (v2.0, Active)</span>
               </div>
             </div>
           </div>
@@ -268,11 +265,17 @@ export default function HostDetailPage() {
             </h2>
             <div className="space-y-3 text-xs divide-y divide-slate-800">
               <div className="flex justify-between pt-2">
-                <span className="text-slate-400">BitLocker Protection (C:)</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">BitLocker Protection (C:)</span>
+                  <InfoTooltip fieldId="endpoint.bitlocker" iconClassName="text-slate-400 hover:text-white hover:bg-slate-700" />
+                </div>
                 <span className="text-emerald-400 font-medium">Protected (XTS-AES 256-bit)</span>
               </div>
               <div className="flex justify-between pt-2">
-                <span className="text-slate-400">Defender Real-time Protection</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">Defender Real-time Protection</span>
+                  <InfoTooltip fieldId="endpoint.defender" iconClassName="text-slate-400 hover:text-white hover:bg-slate-700" />
+                </div>
                 <span className="text-emerald-400 font-medium">Enabled</span>
               </div>
               <div className="flex justify-between pt-2">
