@@ -1,0 +1,15 @@
+apiVersion: v2
+name: endpointguard
+description: Enterprise 100% Agentless Endpoint Audit, CIS Compliance & Vulnerability Management Platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - security
+  - cis-benchmark
+  - vulnerability-management
+  - agentless
+  - compliance
+maintainers:
+  - name: EndpointGuard Core Security Team
+    email: security@endpointguard.corp

@@ -1,0 +1,68 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "endpointguard.fullname" . }}-api-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "endpointguard.name" . }}-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from Ingress Controller
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Allow DB egress to Postgres
+    - ports:
+        - protocol: TCP
+          port: 5432
+    # Allow OTel Collector egress
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "endpointguard.name" . }}-otel-collector
+      ports:
+        - protocol: TCP
+          port: 4317
+    # Allow DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "endpointguard.fullname" . }}-dashboard-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "endpointguard.name" . }}-dashboard
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # Allow egress to API
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "endpointguard.name" . }}-api
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+{{- end }}

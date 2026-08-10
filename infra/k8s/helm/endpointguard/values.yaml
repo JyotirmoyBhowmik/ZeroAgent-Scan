@@ -1,0 +1,149 @@
+# Default values for endpointguard Helm Chart
+global:
+  environment: production
+  domain: endpointguard.corp.local
+  imageRegistry: ghcr.io/endpointguard
+
+# -----------------------------------------------------------------------------
+# Control Plane API
+# -----------------------------------------------------------------------------
+api:
+  replicaCount: 3
+  image:
+    repository: ghcr.io/endpointguard/api
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  env:
+    PORT: "8080"
+    SERVICE_NAME: "endpointguard-api"
+    LOG_LEVEL: "info"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  secrets:
+    databaseUrlSecret: "endpointguard-secrets"
+    databaseUrlKey: "database-url"
+    vaultMasterKeySecret: "endpointguard-secrets"
+    vaultMasterKeyKey: "vault-master-key"
+    jwtSecretKeySecret: "endpointguard-secrets"
+    jwtSecretKeyKey: "jwt-secret-key"
+
+# -----------------------------------------------------------------------------
+# Next.js Dashboard
+# -----------------------------------------------------------------------------
+dashboard:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/endpointguard/dashboard
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  env:
+    NEXT_PUBLIC_API_URL: "https://api.endpointguard.corp.local/api/v1"
+
+# -----------------------------------------------------------------------------
+# Background Workers (NVD Vuln Correlation & Configuration Drift)
+# -----------------------------------------------------------------------------
+workers:
+  vulnWorker:
+    replicaCount: 2
+    image:
+      repository: ghcr.io/endpointguard/api
+      tag: v1.0.0
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  driftWorker:
+    replicaCount: 2
+    image:
+      repository: ghcr.io/endpointguard/api
+      tag: v1.0.0
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+# -----------------------------------------------------------------------------
+# Subnet Collector Gateway (Standalone On-Prem Binary by Default)
+# -----------------------------------------------------------------------------
+gateway:
+  # Gateways run on-prem inside customer/datacenter subnets by default.
+  # Set to true ONLY if you wish to run a collector inside the Kubernetes cluster itself.
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: ghcr.io/endpointguard/gateway
+    tag: v1.0.0
+
+# -----------------------------------------------------------------------------
+# OpenTelemetry Collector
+# -----------------------------------------------------------------------------
+otelCollector:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: 0.98.0
+
+# -----------------------------------------------------------------------------
+# Ingress Configuration
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+  hosts:
+    - host: dashboard.endpointguard.corp.local
+      paths:
+        - path: /
+          pathType: Prefix
+          backend: dashboard
+    - host: api.endpointguard.corp.local
+      paths:
+        - path: /
+          pathType: Prefix
+          backend: api
+  tls:
+    - secretName: endpointguard-tls
+      hosts:
+        - dashboard.endpointguard.corp.local
+        - api.endpointguard.corp.local
+
+# -----------------------------------------------------------------------------
+# Network Policies
+# -----------------------------------------------------------------------------
+networkPolicy:
+  enabled: true

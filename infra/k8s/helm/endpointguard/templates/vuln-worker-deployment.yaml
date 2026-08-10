@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "endpointguard.fullname" . }}-vuln-worker
+  labels:
+    app.kubernetes.io/name: {{ include "endpointguard.name" . }}-vuln-worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.workers.vulnWorker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "endpointguard.name" . }}-vuln-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "endpointguard.name" . }}-vuln-worker
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: vuln-worker
+          image: "{{ .Values.workers.vulnWorker.image.repository }}:{{ .Values.workers.vulnWorker.image.tag }}"
+          command: ["/app/server", "--worker-mode=vulnerability"]
+          env:
+            - name: SERVICE_NAME
+              value: "endpointguard-vuln-worker"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "{{ .Values.api.env.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.secrets.databaseUrlSecret }}
+                  key: {{ .Values.api.secrets.databaseUrlKey }}
+          resources:
+            {{- toYaml .Values.workers.vulnWorker.resources | nindent 12 }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false

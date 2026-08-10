@@ -17,6 +17,7 @@ import (
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/middleware"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/openapi"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/repository"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/telemetry"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vault"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vulnscan"
 	"github.com/go-chi/chi/v5"
@@ -86,6 +87,10 @@ func main() {
 	r.Use(chimiddleware.RealIP)
 	r.Use(middleware.StructuredLoggingMiddleware(cfg.ServiceName))
 	r.Use(middleware.SecurityHeadersMiddleware)
+	r.Use(telemetry.LatencyMiddleware)
+
+	// Standard Prometheus Scrape Endpoint
+	r.Get("/metrics", telemetry.GetRegistry().MetricsHandler())
 
 	// Strict CORS
 	r.Use(cors.Handler(cors.Options{
