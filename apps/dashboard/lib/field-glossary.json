@@ -1,128 +1,254 @@
 {
   "scan.target_cidr": {
-    "title": "Target Subnet CIDR / Host IP",
-    "description": "The IPv4 network subnet in CIDR notation or single host IP to be scanned over WinRM.",
-    "format": "x.x.x.x/yy (Subnet) or x.x.x.x (Single Host)",
-    "example": "192.0.2.0/24 or 192.0.2.10/32"
+    "label": "Target Subnet CIDR / Host IP",
+    "meaning": "Specifies the IPv4 network boundary or single machine address to probe for agentless WinRM endpoints, bounded by SSRF filters that block AWS/Azure/GCP cloud metadata addresses (169.254.169.254).",
+    "format": "CIDR notation (e.g. 10.20.30.0/24) or single host IP (e.g. 10.20.30.15)",
+    "example": "10.20.30.0/24 or 192.0.2.0/24 (RFC 5737 Test Net)"
   },
   "scan.protocol": {
-    "title": "Agentless Protocol",
-    "description": "Transport protocol and remote management standard used by the collector gateway.",
+    "label": "Agentless Protocol",
+    "meaning": "Determines the transport mechanism for remote CIM introspection: choose WinRM HTTPS (port 5986) for modern firewalled Windows 10/11 and Server 2016+ environments with TLS 1.3 encryption, or select WMI/DCOM (port 135 + dynamic high RPC ports) only for legacy Windows Server 2008/2012 systems lacking PowerShell Remoting.",
     "format": "winrm_https | winrm_http | wmi_dcom | snmp_v3 | ssh_bmc",
-    "example": "WinRM over HTTPS (Port 5986 - Recommended)"
+    "example": "winrm_https (Port 5986 - Recommended for single-port firewall traversal)"
   },
   "scan.profile": {
-    "title": "Scan Profile",
-    "description": "Determines the depth of WMI/CIM queries and CIS benchmark compliance rules evaluated during the scan.",
+    "label": "Scan Profile",
+    "meaning": "Controls the depth of WMI/CIM classes queried during the run, balancing execution duration against compliance depth.",
     "format": "full_hardware_os | rapid_inventory | cis_level_1 | critical_patches",
-    "example": "Full Hardware & CIS Benchmark Audit"
+    "example": "full_hardware_os (Full Hardware, OS, BitLocker, Defender, & CIS Audit)"
   },
   "scan.vault_secret_ref": {
-    "title": "Credential Vault Reference",
-    "description": "Opaque identifier referencing encrypted credentials in the AES-256-GCM Vault Manager.",
+    "label": "Credential Vault Reference",
+    "meaning": "An opaque reference pointer to encrypted Active Directory Domain Admin or local administrator credentials stored in the AES-256-GCM Vault Manager, ensuring passwords never travel across the network in plaintext.",
     "format": "sec_ref_[service]_[tenant]_[index]",
     "example": "sec_ref_winrm_domain_prod_01"
   },
   "scan.gateway_id": {
-    "title": "Collector Gateway",
-    "description": "The local subnet collector gateway daemon executing the remote WinRM queries via mutual TLS.",
+    "label": "Collector Gateway",
+    "meaning": "The local subnet worker daemon that receives encrypted job tasks via mTLS and executes local WinRM HTTPS requests inside the target network segment.",
     "format": "gw-[subnet-descriptor]",
-    "example": "gw-subnet-192-0-2-0"
+    "example": "gw-subnet-10-100-1-0"
+  },
+  "audit.bitlocker": {
+    "label": "BitLocker Volume Encryption Audit",
+    "meaning": "Queries Win32_EncryptableVolume to verify volume encryption method, protection status (XTS-AES 128/256), and key protector presence for all fixed NTFS/ReFS drives.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled"
+  },
+  "audit.software": {
+    "label": "Installed Software & Hotfixes Audit",
+    "meaning": "Enumerates 32-bit/64-bit Uninstall registry hives and Win32_QuickFixEngineering to index application packages, build versions, and security hotfix KB numbers.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled"
+  },
+  "audit.services": {
+    "label": "Windows Services & Startup Audit",
+    "meaning": "Scans Win32_Service for service display names, startup types (Automatic/Manual/Disabled), binary paths, and running account security contexts.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled"
+  },
+  "audit.tpm_bios": {
+    "label": "BIOS & TPM 2.0 PCR Attestation Audit",
+    "meaning": "Interrogates Win32_BIOS and Win32_Tpm to inspect firmware release dates, UEFI Secure Boot enforcement, and TPM 2.0 PCR 0 hardware measurements.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled"
+  },
+  "audit.user_accounts": {
+    "label": "User Accounts & Local Admins Audit",
+    "meaning": "Extracts local user accounts, lockout policies, and members of the built-in Administrators group via Win32_GroupUser to detect unauthorized privilege escalation.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled"
+  },
+  "status.compliant": {
+    "label": "Compliant Status",
+    "meaning": "Assigned when all evaluated CIS Benchmark controls, Microsoft Defender real-time protection, BitLocker volume encryption, and TPM 2.0 attestation pass with zero high-severity policy failures.",
+    "format": "Badge State (Green / Pass)",
+    "example": "Compliant (Score: 98.5%)"
+  },
+  "status.partial": {
+    "label": "Partial Status",
+    "meaning": "Assigned when non-critical configuration drift is detected — such as an unencrypted secondary data drive, missing non-critical security hotfix, or modified UAC prompt level — while the host remains reachable and authenticated.",
+    "format": "Badge State (Amber / Warning)",
+    "example": "Partial (Secondary Volume D: Unencrypted)"
+  },
+  "status.collection_failed": {
+    "label": "Collection Failed Status",
+    "meaning": "Triggered when the agentless scanner cannot gather host telemetry due to a WinRM connection timeout (port 5986), Kerberos/NTLM authentication rejection (HTTP 401), firewall drop, or invalid RPC credentials.",
+    "format": "Badge State (Red / Error)",
+    "example": "Collection Failed (WinRM HTTPS Handshake Timeout on Port 5986)"
+  },
+  "status.bios_verification": {
+    "label": "BIOS Verification Status",
+    "meaning": "Triggered when hardware root-of-trust checks fail — specifically when UEFI Secure Boot is turned off in firmware, TPM 2.0 chip is disabled or absent, or PCR 0 platform measurement does not match the known golden baseline.",
+    "format": "Badge State (Purple / Security Warning)",
+    "example": "BIOS Verification (Secure Boot Disabled in UEFI)"
+  },
+  "health.excellent": {
+    "label": "Excellent Health Band (90.0% – 100.0%)",
+    "meaning": "Endpoints meet full CIS Level 1 benchmarks with active Defender antivirus definitions updated within 24 hours, BitLocker XTS-AES encryption enforced, and zero known unpatched vulnerabilities.",
+    "format": "Score Range: 90.0% – 100.0%",
+    "example": "96.4% Compliance (Zero Vulnerabilities / Full Encryption)"
+  },
+  "health.good": {
+    "label": "Good Health Band (75.0% – 89.9%)",
+    "meaning": "Endpoints have minor non-critical configuration drift, pending system reboots, or secondary drive exemptions, but have zero CISA Known Exploited Vulnerabilities (KEVs).",
+    "format": "Score Range: 75.0% – 89.9%",
+    "example": "82.1% Compliance (Pending Reboot / Minor GPO Drift)"
+  },
+  "health.fair": {
+    "label": "Fair Health Band (50.0% – 74.9%)",
+    "meaning": "Endpoints exhibit significant security posture lapses, such as missing monthly cumulative updates older than 30 days, disabled UAC prompt enforcement, or missing antivirus signature updates.",
+    "format": "Score Range: 50.0% – 74.9%",
+    "example": "64.0% Compliance (Missing KB5036893 / UAC Disabled)"
+  },
+  "health.critical": {
+    "label": "Critical Health Band (< 50.0%)",
+    "meaning": "Endpoints have active CISA KEV remote-code-execution vulnerabilities, disabled Microsoft Defender real-time protection, unencrypted OS boot volumes, or persistent authentication failures.",
+    "format": "Score Range: 0.0% – 49.9%",
+    "example": "35.0% Compliance (CVE-2024-30051 Present / Defender Inactive)"
+  },
+  "admin.auto_remediation": {
+    "label": "Automatic Remediation Engine",
+    "meaning": "When ON, the system automatically executes signed PowerShell remediation scripts over WinRM to fix drifted settings (e.g. re-enabling Defender or restarting Spooler); risk: automated changes can restart services during peak hours or trigger conflicting Active Directory GPO flapping.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Disabled (Recommended for production until script testing is signed off)"
+  },
+  "admin.mandatory_bitlocker": {
+    "label": "Mandatory BitLocker Policy",
+    "meaning": "When ON, any endpoint with unencrypted volumes or missing TPM protectors is hard-failed to 0% compliance regardless of other CIS benchmarks; risk: legacy hypervisor virtual machines lacking virtual TPM (vTPM) will immediately breach SLA.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled (Enforces XTS-AES 256 disk encryption across all laptops)"
+  },
+  "admin.powershell_introspection": {
+    "label": "Live PowerShell Introspection",
+    "meaning": "When ON, allows execution of dynamic, ad-hoc CIM PowerShell script blocks during scan sweeps for deep registry and event-log analysis; risk: consumes additional CPU cycles on target endpoints and may generate false-positive alerts in third-party EDR/SIEM tools if not allowlisted.",
+    "format": "Boolean Toggle (Enabled / Disabled)",
+    "example": "Enabled (Allows deep forensic and scheduled task indexing)"
   },
   "admin.rollout_tier_pilot": {
-    "title": "Pilot Ring (Canary Tier)",
-    "description": "When ON, scheduled scans include canary test machines (first 2-5% of fleet). When OFF, pilot ring is bypassed.",
+    "label": "Pilot Ring (Canary Tier 5-10%)",
+    "meaning": "When ON, scheduled scan sweeps target canary test machines and lab endpoints first to validate credentials and network latency before broader rollout.",
     "format": "Boolean Toggle (Enabled / Disabled)",
-    "example": "Enabled for initial patch testing and auth verification"
+    "example": "Enabled"
   },
   "admin.rollout_tier_staged": {
-    "title": "Staged Ring (Departmental Tier)",
-    "description": "When ON, scheduled scans include secondary departmental endpoints (~25% of fleet). When OFF, staged tier is skipped.",
+    "label": "Staged Ring (Departmental Tier 25-50%)",
+    "meaning": "When ON, scheduled scan sweeps expand to departmental subnets and non-critical workstations after successful pilot validation.",
     "format": "Boolean Toggle (Enabled / Disabled)",
-    "example": "Enabled after 48h error-free pilot validation"
+    "example": "Enabled"
   },
   "admin.rollout_tier_full": {
-    "title": "Full Fleet Ring (100% Production)",
-    "description": "When ON, scheduled scans sweep all 400 production endpoints. When OFF, production fleet is protected from automated sweeps.",
+    "label": "Full Fleet Ring (100% Production)",
+    "meaning": "When ON, scheduled automated sweeps target all ~400 production servers and endpoints across the enterprise.",
     "format": "Boolean Toggle (Enabled / Disabled)",
-    "example": "Enabled only after operator sign-off and pilot audit"
+    "example": "Enabled"
   },
   "admin.retention_strategy": {
-    "title": "Snapshot Retention Strategy",
-    "description": "Specifies whether old JSONB host snapshots are exported to compressed gzip cold-storage or downsampled to weekly snapshots.",
+    "label": "Snapshot Retention Strategy",
+    "meaning": "Determines whether raw JSONB host introspection payloads older than the retention window are exported to compressed gzip cold storage or pruned down to one golden checkpoint per week.",
     "format": "archive (Compressed GZIP on disk) | downsample (Keep 1 weekly)",
-    "example": "archive (Recommended for compliance preservation)"
+    "example": "archive (Recommended for audit trail preservation)"
   },
   "admin.retention_window": {
-    "title": "Retention Window (Days)",
-    "description": "Number of days full-resolution daily introspection snapshots are retained in PostgreSQL before archival/downsampling.",
-    "format": "Positive Integer (30 - 365)",
+    "label": "Full-Resolution Retention Window",
+    "meaning": "The number of days full-resolution daily telemetry snapshots are kept in the active PostgreSQL database before being processed by the retention engine.",
+    "format": "Integer Days (7 – 3650)",
     "example": "90 Days"
   },
   "admin.test_alert_url": {
-    "title": "Target Webhook URL",
-    "description": "Destination HTTPS endpoint for synthetic alerting verification (Slack, Microsoft Teams, PagerDuty, Splunk).",
+    "label": "Target Webhook Endpoint URL",
+    "meaning": "The destination HTTPS URL (Slack incoming webhook, Microsoft Teams connector, PagerDuty, or SIEM) that receives synthetic alert notifications to prove alerting reaches human on-call engineers.",
     "format": "HTTPS URL",
-    "example": "https://hooks.slack.com/services/T0000/B000/XXXXX"
+    "example": "https://hooks.slack.com/services/T0000/B0000/XXXXX"
   },
   "admin.bulk_tier_target": {
-    "title": "Target Rollout Tier",
-    "description": "The destination tier (pilot, staged, or full) to assign selected endpoints to.",
+    "label": "Target Rollout Tier",
+    "meaning": "The operational ring (pilot, staged, or full) to which the matched subnets or Active Directory Organizational Units will be reassigned.",
     "format": "pilot | staged | full",
     "example": "staged"
   },
   "admin.bulk_tier_justification": {
-    "title": "Operator Justification Note",
-    "description": "Mandatory rationale recorded into the OWASP ASVS immutable security audit log.",
-    "format": "String (10-255 characters)",
-    "example": "Subnet 198.51.100.0/24 promoted after 0 authentication lockouts"
+    "label": "Operator Justification Note",
+    "meaning": "Mandatory rationale string recorded permanently into the immutable OWASP ASVS audit log for governance and change control tracing.",
+    "format": "String (10 – 255 characters)",
+    "example": "Subnet 198.51.100.0/24 promoted to Staged after 48h error-free pilot validation"
+  },
+  "rbac.admin": {
+    "label": "Admin Role Permission Boundary",
+    "meaning": "Grants full tenant management, user provisioning, credential rotation via step-up authentication, alert webhook configuration, and retention policy execution.",
+    "format": "Role Identifier: admin",
+    "example": "Full Read/Write/Configure across all modules and credentials"
+  },
+  "rbac.operator": {
+    "label": "Operator Role Permission Boundary",
+    "meaning": "Permits triggering and cancelling agentless scan jobs, acknowledging drift events, and viewing endpoint telemetry, but forbids user administration, credential viewing, or system reconfiguration.",
+    "format": "Role Identifier: operator",
+    "example": "Can launch scans and promote tiers; 403 on user creation and vault secret edits"
+  },
+  "rbac.auditor": {
+    "label": "Auditor Role Permission Boundary",
+    "meaning": "Provides strictly read-only access to compliance dashboards, vulnerability reports, CIS benchmark evaluations, and immutable security audit logs with zero scan-triggering or modifying privileges.",
+    "format": "Role Identifier: auditor",
+    "example": "Read-only view across reports, audit logs, and compliance grids"
+  },
+  "rbac.viewer": {
+    "label": "Viewer Role Permission Boundary",
+    "meaning": "Restricted read-only access to high-level fleet overview metrics and endpoint inventory lists, blocked from launching scans, viewing raw audit logs, or generating compliance reports.",
+    "format": "Role Identifier: viewer",
+    "example": "Read-only view of /endpoints and / dashboard only"
+  },
+  "rbac.superadmin": {
+    "label": "SuperAdmin / Break-Glass Boundary",
+    "meaning": "Emergency break-glass recovery account with system-wide bypass capabilities, protected by mandatory TOTP multi-factor authentication and writing high-severity audit entries on every action.",
+    "format": "Role Identifier: superadmin (Emergency Use Only)",
+    "example": "Direct recovery access during active directory federation outages"
   },
   "endpoint.rollout_tier": {
-    "title": "Rollout Tier",
-    "description": "Operational deployment ring controlling whether scheduled scan sweeps target this host.",
-    "format": "pilot (Canary) | staged (Phase 2) | full (All Fleet)",
+    "label": "Rollout Tier",
+    "meaning": "The assigned operational deployment ring that governs whether this host is included during automated daily scheduled scan sweeps.",
+    "format": "pilot | staged | full",
     "example": "pilot"
   },
   "endpoint.compliance_score": {
-    "title": "CIS Compliance Score",
-    "description": "Percentage of evaluated CIS Benchmark and NIST SP 800-53 security controls passed by this endpoint.",
-    "format": "Percentage (0.0% - 100.0%)",
-    "example": "98.5%"
+    "label": "CIS Compliance Score",
+    "meaning": "The percentage of evaluated CIS Windows Benchmark Level 1 recommendations and NIST SP 800-53 security controls passed by this endpoint.",
+    "format": "Percentage (0.0% – 100.0%)",
+    "example": "94.2%"
   },
   "endpoint.bitlocker": {
-    "title": "BitLocker Encryption State",
-    "description": "Volume encryption and key protector status reported by Win32_EncryptableVolume.",
-    "format": "FullyEncrypted | ProtectionOff | EncryptionInProgress",
-    "example": "FullyEncrypted (AES-XTS 256)"
+    "label": "BitLocker Protection State",
+    "meaning": "Volume encryption status and cryptographic algorithm reported by the Win32_EncryptableVolume CIM provider for the operating system volume.",
+    "format": "Protected (XTS-AES 256) | Unencrypted | ProtectionSuspended",
+    "example": "Protected (XTS-AES 256-bit)"
   },
   "endpoint.defender": {
-    "title": "Microsoft Defender AV Engine",
-    "description": "Real-time protection state, cloud protection, and signature definition update freshness.",
-    "format": "ActiveAndUpdated | SignaturesOutOfDate | Disabled",
-    "example": "ActiveAndUpdated (Engine: 1.1.24030.4)"
+    "label": "Microsoft Defender Antivirus Engine",
+    "meaning": "Real-time file protection state, cloud-delivered malware protection, and definition signature freshness reported by MSFT_MpComputerStatus.",
+    "format": "Enabled (Updated) | Disabled | SignaturesOutOfDate",
+    "example": "Enabled (Signatures current as of today)"
   },
   "endpoint.tpm": {
-    "title": "TPM 2.0 Attestation",
-    "description": "Hardware security chip presence, spec version, and PCR measurement status.",
-    "format": "Present (v2.0) | NotPresent | DisabledInBIOS",
-    "example": "TPM 2.0 (Infineon IFX, Status: Active)"
+    "label": "TPM 2.0 Security Processor",
+    "meaning": "Cryptographic hardware security module state, specification version, and PCR 0 platform measurement integrity reported by Win32_Tpm.",
+    "format": "Present (v2.0, Active) | Absent | DisabledInFirmware",
+    "example": "Present (v2.0, Manufacturer: IFX)"
   },
   "report.ttl_hours": {
-    "title": "Shareable Link TTL (Hours)",
-    "description": "Time-To-Live duration before the cryptographic share link token expires and becomes inaccessible.",
-    "format": "Integer Hours (1 - 168)",
-    "example": "24 Hours"
+    "label": "Shareable Link Expiration Window",
+    "meaning": "The time duration before the cryptographic HMAC token in the public report link expires and access is automatically revoked.",
+    "format": "Integer Hours (1, 24, 72, 168)",
+    "example": "24 Hours (Standard 1-Day Share Link)"
   },
   "report.type": {
-    "title": "Audit Report Type",
-    "description": "Focus of the report: executive fleet metrics, regulatory CIS/NIST audit, or vulnerability posture.",
+    "label": "Audit Report Type",
+    "meaning": "Defines the regulatory and structural focus of the generated report: high-level fleet posture, CIS Benchmark compliance breakdown, or CISA KEV vulnerability ledger.",
     "format": "EXECUTIVE_SUMMARY | COMPLIANCE_AUDIT | VULNERABILITY_POSTURE",
-    "example": "COMPLIANCE_AUDIT"
+    "example": "COMPLIANCE_AUDIT (CIS Microsoft Windows Desktop & Server Benchmark)"
   },
   "gateway.fingerprint": {
-    "title": "mTLS Certificate Fingerprint",
-    "description": "Cryptographic SHA-256 fingerprint of the client certificate presented during mTLS 1.3 handshake.",
-    "format": "SHA256:[64 Hex Chars]",
+    "label": "mTLS Certificate Fingerprint",
+    "meaning": "The cryptographic SHA-256 hash of the collector gateway's TLS client certificate, used by the API control plane to verify mutual authentication.",
+    "format": "SHA256:[64 Hexadecimal Characters]",
     "example": "SHA256:4a8f9b2c3d1e5a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b"
   }
 }

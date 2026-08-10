@@ -17,6 +17,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { getFleetMetrics, getDriftEvents, getEndpoints, getNetworkSubnets, api } from "@/lib/api";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { FleetMetrics, DriftEvent, Endpoint, NetworkSubnet, AlertHealthStatus } from "@/lib/types";
 
 export default function FleetOverviewPage() {
@@ -275,9 +276,10 @@ export default function FleetOverviewPage() {
             {/* Band 90-100% */}
             <div>
               <div className="flex justify-between text-xs font-medium mb-1.5">
-                <span className="text-slate-300 flex items-center gap-2">
+                <span className="text-slate-300 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                  90% - 100% (High Compliance)
+                  <span>90% - 100% (High Compliance)</span>
+                  <InfoTooltip fieldId="health.excellent" iconClassName="text-slate-400 hover:text-white" />
                 </span>
                 <span className="text-slate-100 font-bold">{bands.band_90_100} hosts ({Math.round((bands.band_90_100 / totalInBands) * 100)}%)</span>
               </div>
@@ -292,9 +294,10 @@ export default function FleetOverviewPage() {
             {/* Band 75-89% */}
             <div>
               <div className="flex justify-between text-xs font-medium mb-1.5">
-                <span className="text-slate-300 flex items-center gap-2">
+                <span className="text-slate-300 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
-                  75% - 89% (Moderate Compliance)
+                  <span>75% - 89% (Moderate Compliance)</span>
+                  <InfoTooltip fieldId="health.good" iconClassName="text-slate-400 hover:text-white" />
                 </span>
                 <span className="text-slate-100 font-bold">{bands.band_75_89} hosts ({Math.round((bands.band_75_89 / totalInBands) * 100)}%)</span>
               </div>
@@ -309,9 +312,10 @@ export default function FleetOverviewPage() {
             {/* Band 50-74% */}
             <div>
               <div className="flex justify-between text-xs font-medium mb-1.5">
-                <span className="text-slate-300 flex items-center gap-2">
+                <span className="text-slate-300 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-                  50% - 74% (Needs Remediation)
+                  <span>50% - 74% (Needs Remediation)</span>
+                  <InfoTooltip fieldId="health.fair" iconClassName="text-slate-400 hover:text-white" />
                 </span>
                 <span className="text-slate-100 font-bold">{bands.band_50_74} hosts ({Math.round((bands.band_50_74 / totalInBands) * 100)}%)</span>
               </div>
@@ -326,9 +330,10 @@ export default function FleetOverviewPage() {
             {/* Band Under 50% */}
             <div>
               <div className="flex justify-between text-xs font-medium mb-1.5">
-                <span className="text-slate-300 flex items-center gap-2">
+                <span className="text-slate-300 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-400"></span>
-                  &lt; 50% (Critical Risk)
+                  <span>&lt; 50% (Critical Risk)</span>
+                  <InfoTooltip fieldId="health.critical" iconClassName="text-slate-400 hover:text-white" />
                 </span>
                 <span className="text-slate-100 font-bold">{bands.band_under_50} hosts ({Math.round((bands.band_under_50 / totalInBands) * 100)}%)</span>
               </div>
@@ -347,15 +352,24 @@ export default function FleetOverviewPage() {
           <h2 className="text-base font-semibold text-slate-100">Security Baseline Status</h2>
           <div className="space-y-3.5 text-xs">
             <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/40 border border-slate-800">
-              <span className="text-slate-300">BitLocker Volume Encryption</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-300">BitLocker Volume Encryption</span>
+                <InfoTooltip fieldId="audit.bitlocker" iconClassName="text-slate-400 hover:text-white" />
+              </div>
               <span className="font-semibold text-emerald-400">{metrics?.bitlocker_rate}%</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/40 border border-slate-800">
-              <span className="text-slate-300">TPM 2.0 Hardware Active</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-300">TPM 2.0 Hardware Active</span>
+                <InfoTooltip fieldId="audit.tpm_bios" iconClassName="text-slate-400 hover:text-white" />
+              </div>
               <span className="font-semibold text-emerald-400">{metrics?.tpm_rate}%</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/40 border border-slate-800">
-              <span className="text-slate-300">Defender Cloud & Real-time</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-300">Defender Cloud & Real-time</span>
+                <InfoTooltip fieldId="endpoint.defender" iconClassName="text-slate-400 hover:text-white" />
+              </div>
               <span className="font-semibold text-emerald-400">{metrics?.defender_rate}%</span>
             </div>
           </div>
