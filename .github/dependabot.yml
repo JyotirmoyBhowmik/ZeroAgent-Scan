@@ -1,0 +1,55 @@
+# Dependabot configuration for EndpointGuard (OWASP A06: Vulnerable & Outdated Components)
+version: 2
+updates:
+  # Go API & Gateway dependencies
+  - package-ecosystem: "gomod"
+    directory: "/apps/api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+      - "backend"
+
+  - package-ecosystem: "gomod"
+    directory: "/apps/gateway"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+      - "gateway"
+
+  # Next.js Dashboard dependencies (pnpm/npm)
+  - package-ecosystem: "npm"
+    directory: "/apps/dashboard"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+      - "frontend"
+
+  # Python Scan Engine dependencies
+  - package-ecosystem: "pip"
+    directory: "/packages/scan-engine/python"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+      - "scan-engine"
+
+  # GitHub Actions Workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"

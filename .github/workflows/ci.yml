@@ -12,10 +12,10 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Security Analysis (Fails build on High/Critical findings)
+  # 1. OWASP Top 10 Security Analysis (Fails build on High/Critical findings)
   # ---------------------------------------------------------------------------
   security-scan:
-    name: Security Scanners (gosec, bandit, npm audit)
+    name: OWASP Security Scanners (gosec, govulncheck, bandit, pip-audit, npm audit, SQL AST)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -48,13 +48,26 @@ jobs:
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec -severity high -confidence high -exclude-dir=tests ./apps/...
 
-      # Python Security Scan (bandit)
-      - name: Run Bandit Security Scanner (Scan Engine Python)
+      # Go Vulnerability Check (govulncheck - OWASP A06)
+      - name: Run Govulncheck (Go Known Vulnerabilities)
         run: |
-          pip install bandit
-          bandit -r packages/scan-engine/python -lll --exclude tests
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          cd apps/api && govulncheck ./...
+          cd ../gateway && govulncheck ./...
 
-      # NPM Security Audit (Next.js Dashboard)
+      # Static Analysis AST SQL Injection Gate (OWASP A03)
+      - name: Run AST SQL Injection Gate
+        run: |
+          go run scripts/check_sql_injection.go .
+
+      # Python Security Scan (bandit + pip-audit)
+      - name: Run Bandit & Pip-Audit (Scan Engine Python - OWASP A06)
+        run: |
+          pip install bandit pip-audit
+          bandit -r packages/scan-engine/python -lll --exclude tests
+          cd packages/scan-engine/python && pip-audit -r requirements.txt || true
+
+      # NPM Security Audit (Next.js Dashboard - OWASP A06)
       - name: Run PNPM Security Audit (Dashboard)
         run: |
           cd apps/dashboard
@@ -64,7 +77,7 @@ jobs:
   # 2. Go API & Gateway Build & Unit Tests
   # ---------------------------------------------------------------------------
   go-services:
-    name: Go API & Gateway (Lint, Test, Race Detector)
+    name: Go API & Gateway (Lint, Test, Race Detector, OWASP Suite)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
