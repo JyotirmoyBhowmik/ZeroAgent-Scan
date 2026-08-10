@@ -145,8 +145,16 @@ func main() {
 
 			// Endpoints & Hardware Inventory
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/endpoints", apiHandler.ListEndpoints)
+			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/endpoints/pilot/summary", apiHandler.GetPilotHealthSummary)
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/endpoints/{id}", apiHandler.GetEndpointByID)
+			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Post("/endpoints/rollout-tier/promote", apiHandler.PromoteEndpointsTier)
+			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Post("/endpoints/rollout-tier/bulk-assign", apiHandler.BulkAssignEndpointsTier)
+			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Post("/endpoints/{id}/rollout-tier", apiHandler.UpdateEndpointRolloutTier)
 			protected.With(auth.RequirePermission(auth.PermissionManageTenants), auth.RequireStepUp()).Delete("/endpoints/{id}", apiHandler.DeleteEndpoint)
+
+			// Rollout Tier Settings for Scheduled Scans
+			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/admin/settings/rollout-tiers", apiHandler.GetRolloutSettings)
+			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Put("/admin/settings/rollout-tiers", apiHandler.UpdateRolloutSettings)
 
 			// Keyset Paginated Snapshots
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/snapshots", apiHandler.ListSnapshots)

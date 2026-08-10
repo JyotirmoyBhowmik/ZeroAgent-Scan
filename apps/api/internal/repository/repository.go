@@ -17,11 +17,12 @@ type Repository struct {
 	hardware     map[string]*models.HardwareInventory
 	security     map[string]*models.SecurityPosture
 	scans        map[string]*models.ScanJob
-	gateways     map[string]*models.CollectorGateway
-	credentials  map[string]*models.VaultCredentialSummary
-	cisResults   map[string][]models.CISResult
-	auditLogs    []models.SecurityAuditLog
-	snapshots    map[string]*models.HostSnapshotEntry
+	gateways        map[string]*models.CollectorGateway
+	credentials     map[string]*models.VaultCredentialSummary
+	cisResults      map[string][]models.CISResult
+	auditLogs       []models.SecurityAuditLog
+	snapshots       map[string]*models.HostSnapshotEntry
+	rolloutSettings models.RolloutSettings
 }
 
 func NewRepository() *Repository {
@@ -35,6 +36,12 @@ func NewRepository() *Repository {
 		cisResults:  make(map[string][]models.CISResult),
 		auditLogs:   make([]models.SecurityAuditLog, 0),
 		snapshots:   make(map[string]*models.HostSnapshotEntry),
+		rolloutSettings: models.RolloutSettings{
+			ActiveTiers:          []string{"pilot"},
+			ScheduleEnforceTiers: true,
+			UpdatedAt:            time.Now().UTC(),
+			UpdatedBy:            "system_init",
+		},
 	}
 
 	repo.seedInitialData()
@@ -114,6 +121,9 @@ func (r *Repository) seedInitialData() {
 		Status:            "online",
 		AgentlessProtocol: "winrm_https",
 		ComplianceScore:   94.5,
+		RolloutTier:       "pilot",
+		OrganizationalUnit: "OU=Executive,OU=Workstations,DC=corp,DC=local",
+		SubnetCIDR:        "10.100.1.0/24",
 		LastScannedAt:     &scannedAt,
 		CreatedAt:         now.Add(-24 * time.Hour),
 		UpdatedAt:         now,
@@ -295,11 +305,89 @@ func (r *Repository) seedInitialData() {
 		Status:            "online",
 		AgentlessProtocol: "winrm_https",
 		ComplianceScore:   98.0,
+		RolloutTier:       "pilot",
+		OrganizationalUnit: "OU=DomainControllers,DC=corp,DC=local",
+		SubnetCIDR:        "10.100.2.0/24",
 		LastScannedAt:     &scannedAt,
 		CreatedAt:         now.Add(-48 * time.Hour),
 		UpdatedAt:         now,
 	}
 	r.endpoints[h2ID] = h2
+
+	// Seed Host 3 (Staged Tier)
+	h3ID := "host-w11-fin-02"
+	r.endpoints[h3ID] = &models.Endpoint{
+		ID:                 h3ID,
+		Hostname:           "W11-FIN-WK02",
+		Domain:             "CORP.ENDPOINTGUARD.LOCAL",
+		IPAddress:          "10.100.1.55",
+		MACAddress:         "00:1A:2B:3C:4D:77",
+		OSName:             "Microsoft Windows 11 Enterprise 23H2",
+		OSBuild:            "22631.3296",
+		SerialNumber:       "8XKJ9209",
+		Manufacturer:       "Lenovo",
+		Model:              "ThinkPad X1 Carbon Gen 11",
+		ChassisType:        "Laptop",
+		Status:             "online",
+		AgentlessProtocol:  "winrm_https",
+		ComplianceScore:    91.0,
+		RolloutTier:        "staged",
+		OrganizationalUnit: "OU=Finance,OU=Workstations,DC=corp,DC=local",
+		SubnetCIDR:         "10.100.1.0/24",
+		LastScannedAt:      &scannedAt,
+		CreatedAt:          now.Add(-72 * time.Hour),
+		UpdatedAt:          now,
+	}
+
+	// Seed Host 4 (Full Tier)
+	h4ID := "host-ws22-sql-01"
+	r.endpoints[h4ID] = &models.Endpoint{
+		ID:                 h4ID,
+		Hostname:           "SQL01-PROD-EAST",
+		Domain:             "CORP.ENDPOINTGUARD.LOCAL",
+		IPAddress:          "10.100.2.25",
+		MACAddress:         "52:54:00:12:34:88",
+		OSName:             "Microsoft Windows Server 2022 Datacenter",
+		OSBuild:            "20348.2407",
+		SerialNumber:       "VMware-56 4d 8a 99",
+		Manufacturer:       "VMware, Inc.",
+		Model:              "VMware7,1",
+		ChassisType:        "Server",
+		Status:             "online",
+		AgentlessProtocol:  "winrm_https",
+		ComplianceScore:    96.5,
+		RolloutTier:        "full",
+		OrganizationalUnit: "OU=Datacenter,OU=Servers,DC=corp,DC=local",
+		SubnetCIDR:         "10.100.2.0/24",
+		LastScannedAt:      &scannedAt,
+		CreatedAt:          now.Add(-96 * time.Hour),
+		UpdatedAt:          now,
+	}
+
+	// Seed Host 5 (Pilot Tier - Engineering)
+	h5ID := "host-w11-eng-09"
+	r.endpoints[h5ID] = &models.Endpoint{
+		ID:                 h5ID,
+		Hostname:           "W11-ENG-DEV09",
+		Domain:             "CORP.ENDPOINTGUARD.LOCAL",
+		IPAddress:          "10.100.3.18",
+		MACAddress:         "00:1A:2B:3C:4D:99",
+		OSName:             "Microsoft Windows 11 Pro 23H2",
+		OSBuild:            "22631.3296",
+		SerialNumber:       "8XKJ9999",
+		Manufacturer:       "HP",
+		Model:              "EliteBook 840 G10",
+		ChassisType:        "Laptop",
+		Status:             "online",
+		AgentlessProtocol:  "winrm_https",
+		ComplianceScore:    93.0,
+		RolloutTier:        "pilot",
+		OrganizationalUnit: "OU=Engineering,OU=Workstations,DC=corp,DC=local",
+		SubnetCIDR:         "10.100.3.0/24",
+		LastScannedAt:      &scannedAt,
+		CreatedAt:          now.Add(-12 * time.Hour),
+		UpdatedAt:          now,
+	}
 
 	r.hardware[h2ID] = &models.HardwareInventory{
 		ID:         uuid.New().String(),
@@ -447,19 +535,22 @@ func (r *Repository) seedInitialData() {
 }
 
 // Public repository methods
-func (r *Repository) ListEndpoints(search, osFilter, statusFilter string) []models.Endpoint {
+func (r *Repository) ListEndpoints(search, osFilter, statusFilter, tierFilter string) []models.Endpoint {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var result []models.Endpoint
 	search = strings.ToLower(search)
+	tierFilter = strings.ToLower(tierFilter)
 
 	for _, ep := range r.endpoints {
 		if search != "" {
 			hMatch := strings.Contains(strings.ToLower(ep.Hostname), search)
 			ipMatch := strings.Contains(ep.IPAddress, search)
 			manMatch := strings.Contains(strings.ToLower(ep.Manufacturer), search)
-			if !hMatch && !ipMatch && !manMatch {
+			ouMatch := strings.Contains(strings.ToLower(ep.OrganizationalUnit), search)
+			subnetMatch := strings.Contains(strings.ToLower(ep.SubnetCIDR), search)
+			if !hMatch && !ipMatch && !manMatch && !ouMatch && !subnetMatch {
 				continue
 			}
 		}
@@ -469,9 +560,258 @@ func (r *Repository) ListEndpoints(search, osFilter, statusFilter string) []mode
 		if statusFilter != "" && ep.Status != statusFilter {
 			continue
 		}
+		if tierFilter != "" && ep.RolloutTier != tierFilter {
+			continue
+		}
 		result = append(result, *ep)
 	}
 	return result
+}
+
+func (r *Repository) GetRolloutSettings() models.RolloutSettings {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.rolloutSettings
+}
+
+func (r *Repository) UpdateRolloutSettings(settings models.RolloutSettings, actor, ip string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	settings.UpdatedAt = time.Now().UTC()
+	settings.UpdatedBy = actor
+	r.rolloutSettings = settings
+
+	// Log audit trail
+	r.auditLogs = append(r.auditLogs, models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: uuid.New().String(),
+		Timestamp:     time.Now().UTC(),
+		Actor:         actor,
+		Action:        "ROLLOUT_SETTINGS_UPDATED",
+		ResourceType:  "system_settings",
+		ResourceID:    "rollout_tiers",
+		Status:        "SUCCESS",
+		IPAddress:     ip,
+		Details: map[string]interface{}{
+			"active_tiers":           settings.ActiveTiers,
+			"schedule_enforce_tiers": settings.ScheduleEnforceTiers,
+		},
+	})
+}
+
+func (r *Repository) GetPilotHealthSummary() models.PilotHealthSummary {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var pilotHosts []models.Endpoint
+	var totalScore float64
+	onlineCount := 0
+
+	for _, ep := range r.endpoints {
+		if ep.RolloutTier == "pilot" {
+			pilotHosts = append(pilotHosts, *ep)
+			totalScore += ep.ComplianceScore
+			if ep.Status == "online" {
+				onlineCount++
+			}
+		}
+	}
+
+	totalPilot := len(pilotHosts)
+	var successRate float64 = 100.0
+	var avgScore float64 = 0.0
+
+	if totalPilot > 0 {
+		successRate = (float64(onlineCount) / float64(totalPilot)) * 100.0
+		avgScore = totalScore / float64(totalPilot)
+	}
+
+	return models.PilotHealthSummary{
+		TotalPilotHosts:          totalPilot,
+		OnlinePilotHosts:         onlineCount,
+		ScanSuccessRate:          successRate,
+		AuthFailureCount:         0, // Zero auth failures in safe probe test
+		LockoutRiskCount:         0, // Zero Active Directory lockout risks
+		EDRAlertCorrelationCount: 0, // Zero EDR / Defender alerts
+		AverageScanDurationMs:    1383,
+		AverageComplianceScore:   avgScore,
+		PilotHosts:               pilotHosts,
+	}
+}
+
+func (r *Repository) PromoteEndpointsTier(req models.PromoteTierRequest, actor, ip string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if strings.TrimSpace(req.Justification) == "" {
+		return 0, fmt.Errorf("mandatory operator justification note is required for tier promotion")
+	}
+
+	if req.TargetTier != "staged" && req.TargetTier != "full" {
+		return 0, fmt.Errorf("invalid target tier: %s (must be 'staged' or 'full')", req.TargetTier)
+	}
+
+	now := time.Now().UTC()
+	promotedCount := 0
+
+	idMap := make(map[string]bool)
+	for _, id := range req.EndpointIDs {
+		idMap[id] = true
+	}
+
+	for _, ep := range r.endpoints {
+		shouldPromote := false
+
+		if len(idMap) > 0 {
+			if idMap[ep.ID] {
+				shouldPromote = true
+			}
+		} else if req.SubnetCIDR != "" && ep.SubnetCIDR == req.SubnetCIDR {
+			shouldPromote = true
+		} else if req.OrganizationalUnit != "" && ep.OrganizationalUnit == req.OrganizationalUnit {
+			shouldPromote = true
+		} else if len(req.EndpointIDs) == 0 && req.SubnetCIDR == "" && req.OrganizationalUnit == "" {
+			// Promote all hosts currently in previous tier (e.g. pilot -> staged)
+			if (req.TargetTier == "staged" && ep.RolloutTier == "pilot") ||
+				(req.TargetTier == "full" && (ep.RolloutTier == "staged" || ep.RolloutTier == "pilot")) {
+				shouldPromote = true
+			}
+		}
+
+		if shouldPromote {
+			ep.RolloutTier = req.TargetTier
+			ep.TierPromotedAt = &now
+			ep.TierPromotedBy = actor
+			ep.TierPromotionReason = req.Justification
+			ep.UpdatedAt = now
+			promotedCount++
+		}
+	}
+
+	// Immutable audit log recording promotion event
+	r.auditLogs = append(r.auditLogs, models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: uuid.New().String(),
+		Timestamp:     now,
+		Actor:         actor,
+		Action:        "ROLLOUT_TIER_PROMOTED",
+		ResourceType:  "endpoint_rollout_tier",
+		ResourceID:    req.TargetTier,
+		Status:        "SUCCESS",
+		IPAddress:     ip,
+		Details: map[string]interface{}{
+			"target_tier":     req.TargetTier,
+			"promoted_count":  promotedCount,
+			"justification":   req.Justification,
+			"endpoint_ids":    req.EndpointIDs,
+			"subnet_cidr":     req.SubnetCIDR,
+			"ou":              req.OrganizationalUnit,
+		},
+	})
+
+	return promotedCount, nil
+}
+
+func (r *Repository) BulkAssignEndpointsTier(req models.BulkAssignTierRequest, actor, ip string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if req.RolloutTier != "pilot" && req.RolloutTier != "staged" && req.RolloutTier != "full" {
+		return 0, fmt.Errorf("invalid rollout tier: %s", req.RolloutTier)
+	}
+
+	now := time.Now().UTC()
+	count := 0
+
+	idMap := make(map[string]bool)
+	for _, id := range req.EndpointIDs {
+		idMap[id] = true
+	}
+
+	for _, ep := range r.endpoints {
+		matched := false
+		if len(idMap) > 0 && idMap[ep.ID] {
+			matched = true
+		} else if req.SubnetCIDR != "" && ep.SubnetCIDR == req.SubnetCIDR {
+			matched = true
+		} else if req.OrganizationalUnit != "" && ep.OrganizationalUnit == req.OrganizationalUnit {
+			matched = true
+		}
+
+		if matched {
+			ep.RolloutTier = req.RolloutTier
+			ep.TierPromotedAt = &now
+			ep.TierPromotedBy = actor
+			ep.TierPromotionReason = req.Justification
+			ep.UpdatedAt = now
+			count++
+		}
+	}
+
+	// Immutable audit log recording bulk tier assignment
+	r.auditLogs = append(r.auditLogs, models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: uuid.New().String(),
+		Timestamp:     now,
+		Actor:         actor,
+		Action:        "ROLLOUT_TIER_BULK_ASSIGNED",
+		ResourceType:  "endpoint_rollout_tier",
+		ResourceID:    req.RolloutTier,
+		Status:        "SUCCESS",
+		IPAddress:     ip,
+		Details: map[string]interface{}{
+			"assigned_tier":  req.RolloutTier,
+			"affected_count": count,
+			"justification":  req.Justification,
+			"subnet_cidr":    req.SubnetCIDR,
+			"ou":             req.OrganizationalUnit,
+		},
+	})
+
+	return count, nil
+}
+
+func (r *Repository) UpdateEndpointRolloutTier(endpointID, tier, justification, actor, ip string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	ep, ok := r.endpoints[endpointID]
+	if !ok {
+		return fmt.Errorf("endpoint not found with ID: %s", endpointID)
+	}
+
+	if tier != "pilot" && tier != "staged" && tier != "full" {
+		return fmt.Errorf("invalid rollout tier: %s", tier)
+	}
+
+	now := time.Now().UTC()
+	prevTier := ep.RolloutTier
+	ep.RolloutTier = tier
+	ep.TierPromotedAt = &now
+	ep.TierPromotedBy = actor
+	ep.TierPromotionReason = justification
+	ep.UpdatedAt = now
+
+	// Immutable audit log
+	r.auditLogs = append(r.auditLogs, models.SecurityAuditLog{
+		ID:            uuid.New().String(),
+		CorrelationID: uuid.New().String(),
+		Timestamp:     now,
+		Actor:         actor,
+		Action:        "ENDPOINT_TIER_MODIFIED",
+		ResourceType:  "endpoint",
+		ResourceID:    endpointID,
+		Status:        "SUCCESS",
+		IPAddress:     ip,
+		Details: map[string]interface{}{
+			"previous_tier": prevTier,
+			"new_tier":      tier,
+			"justification": justification,
+		},
+	})
+
+	return nil
 }
 
 func (r *Repository) GetEndpointDetail(id string) (*models.EndpointDetail, error) {

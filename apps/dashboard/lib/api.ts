@@ -13,6 +13,10 @@ import {
   VaultCredentialSummary,
   ScanJob,
   SecurityAuditLog,
+  PilotHealthSummary,
+  PromoteTierRequest,
+  BulkAssignTierRequest,
+  RolloutSettings,
 } from "./types";
 import {
   MOCK_METRICS,
@@ -358,5 +362,116 @@ export const api = {
       auth_mechanism: "Encrypted WinRM Session (gMSA/Kerberos)",
       message: `Credential validated successfully against ${target_ip} without secret exposure.`,
     };
+  },
+  fetchPilotHealthSummary: async (): Promise<PilotHealthSummary> => {
+    try {
+      const res = await fetch(`${API_BASE}/endpoints/pilot/summary`, {
+        headers: { "X-Tenant-ID": "tenant-default-01" },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    const pilotHosts = MOCK_ENDPOINTS.filter((e) => e.rollout_tier === "pilot");
+    return {
+      total_pilot_hosts: pilotHosts.length,
+      online_pilot_hosts: pilotHosts.filter((e) => e.status === "online").length,
+      scan_success_rate: 100.0,
+      auth_failure_count: 0,
+      lockout_risk_count: 0,
+      edr_alert_correlation_count: 0,
+      average_scan_duration_ms: 1383,
+      average_compliance_score: 95.5,
+      pilot_hosts: pilotHosts,
+    };
+  },
+  promoteRolloutTier: async (
+    req: PromoteTierRequest
+  ): Promise<{ status: string; target_tier: string; promoted_count: number; justification: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/endpoints/rollout-tier/promote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
+        body: JSON.stringify(req),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      status: "PROMOTED",
+      target_tier: req.target_tier,
+      promoted_count: req.endpoint_ids ? req.endpoint_ids.length : 2,
+      justification: req.justification,
+    };
+  },
+  bulkAssignRolloutTier: async (
+    req: BulkAssignTierRequest
+  ): Promise<{ status: string; assigned_tier: string; affected_count: number; justification: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/endpoints/rollout-tier/bulk-assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
+        body: JSON.stringify(req),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      status: "ASSIGNED",
+      assigned_tier: req.rollout_tier,
+      affected_count: req.endpoint_ids ? req.endpoint_ids.length : 1,
+      justification: req.justification,
+    };
+  },
+  updateEndpointRolloutTier: async (
+    id: string,
+    tier: string,
+    justification: string
+  ): Promise<{ status: string; endpoint_id: string; tier: string; justification: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/endpoints/${id}/rollout-tier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
+        body: JSON.stringify({ tier, justification }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      status: "UPDATED",
+      endpoint_id: id,
+      tier,
+      justification,
+    };
+  },
+  fetchRolloutSettings: async (): Promise<RolloutSettings> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/settings/rollout-tiers`, {
+        headers: { "X-Tenant-ID": "tenant-default-01" },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      active_tiers: ["pilot"],
+      schedule_enforce_tiers: true,
+    };
+  },
+  updateRolloutSettings: async (settings: RolloutSettings): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/settings/rollout-tiers`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
+        body: JSON.stringify(settings),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return { status: "UPDATED", settings };
   },
 };

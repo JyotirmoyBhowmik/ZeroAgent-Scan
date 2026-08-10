@@ -3,23 +3,29 @@ package models
 import "time"
 
 type Endpoint struct {
-	ID                string    `json:"id"`
-	Hostname          string    `json:"hostname"`
-	Domain            string    `json:"domain"`
-	IPAddress         string    `json:"ip_address"`
-	MACAddress        string    `json:"mac_address"`
-	OSName            string    `json:"os_name"`
-	OSBuild           string    `json:"os_build"`
-	SerialNumber      string    `json:"serial_number"`
-	Manufacturer      string    `json:"manufacturer"`
-	Model             string    `json:"model"`
-	ChassisType       string    `json:"chassis_type"`
-	Status            string    `json:"status"` // online, offline, scanning, error
-	AgentlessProtocol string    `json:"agentless_protocol"`
-	ComplianceScore   float64   `json:"compliance_score"`
-	LastScannedAt     *time.Time `json:"last_scanned_at,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                  string     `json:"id"`
+	Hostname            string     `json:"hostname"`
+	Domain              string     `json:"domain"`
+	IPAddress           string     `json:"ip_address"`
+	MACAddress          string     `json:"mac_address"`
+	OSName              string     `json:"os_name"`
+	OSBuild             string     `json:"os_build"`
+	SerialNumber        string     `json:"serial_number"`
+	Manufacturer        string     `json:"manufacturer"`
+	Model               string     `json:"model"`
+	ChassisType         string     `json:"chassis_type"`
+	Status              string     `json:"status"` // online, offline, scanning, error
+	AgentlessProtocol   string     `json:"agentless_protocol"`
+	ComplianceScore     float64    `json:"compliance_score"`
+	RolloutTier         string     `json:"rollout_tier"` // pilot, staged, full
+	OrganizationalUnit  string     `json:"organizational_unit,omitempty"`
+	SubnetCIDR          string     `json:"subnet_cidr,omitempty"`
+	TierPromotedAt      *time.Time `json:"tier_promoted_at,omitempty"`
+	TierPromotedBy      string     `json:"tier_promoted_by,omitempty"`
+	TierPromotionReason string     `json:"tier_promotion_reason,omitempty"`
+	LastScannedAt       *time.Time `json:"last_scanned_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 type HardwareInventory struct {
@@ -168,3 +174,39 @@ type HostSnapshotEntry struct {
 	Payload     HostSnapshotPayload `json:"payload"`
 	CreatedAt   time.Time           `json:"created_at"`
 }
+
+type PilotHealthSummary struct {
+	TotalPilotHosts           int        `json:"total_pilot_hosts"`
+	OnlinePilotHosts          int        `json:"online_pilot_hosts"`
+	ScanSuccessRate           float64    `json:"scan_success_rate"`
+	AuthFailureCount          int        `json:"auth_failure_count"`
+	LockoutRiskCount          int        `json:"lockout_risk_count"`
+	EDRAlertCorrelationCount  int        `json:"edr_alert_correlation_count"`
+	AverageScanDurationMs     int64      `json:"average_scan_duration_ms"`
+	AverageComplianceScore    float64    `json:"average_compliance_score"`
+	PilotHosts                []Endpoint `json:"pilot_hosts"`
+}
+
+type PromoteTierRequest struct {
+	TargetTier         string   `json:"target_tier"` // staged, full
+	Justification      string   `json:"justification"`
+	EndpointIDs        []string `json:"endpoint_ids,omitempty"`
+	SubnetCIDR         string   `json:"subnet_cidr,omitempty"`
+	OrganizationalUnit string   `json:"organizational_unit,omitempty"`
+}
+
+type BulkAssignTierRequest struct {
+	RolloutTier        string   `json:"rollout_tier"` // pilot, staged, full
+	Justification      string   `json:"justification"`
+	SubnetCIDR         string   `json:"subnet_cidr,omitempty"`
+	OrganizationalUnit string   `json:"organizational_unit,omitempty"`
+	EndpointIDs        []string `json:"endpoint_ids,omitempty"`
+}
+
+type RolloutSettings struct {
+	ActiveTiers          []string `json:"active_tiers"` // e.g. ["pilot"] or ["pilot", "staged"]
+	ScheduleEnforceTiers bool     `json:"schedule_enforce_tiers"`
+	UpdatedAt            time.Time `json:"updated_at"`
+	UpdatedBy            string   `json:"updated_by"`
+}
+

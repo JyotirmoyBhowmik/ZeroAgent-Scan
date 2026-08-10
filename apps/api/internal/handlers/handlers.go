@@ -68,10 +68,131 @@ func (h *APIHandler) ListEndpoints(w http.ResponseWriter, r *http.Request) {
 	search := middleware.SanitizeText(r.URL.Query().Get("search"))
 	osFilter := middleware.SanitizeText(r.URL.Query().Get("os"))
 	statusFilter := middleware.SanitizeText(r.URL.Query().Get("status"))
+	tierFilter := middleware.SanitizeText(r.URL.Query().Get("rollout_tier"))
 
-	endpoints := h.repo.ListEndpoints(search, osFilter, statusFilter)
+	endpoints := h.repo.ListEndpoints(search, osFilter, statusFilter, tierFilter)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(endpoints)
+}
+
+func (h *APIHandler) GetPilotHealthSummary(w http.ResponseWriter, r *http.Request) {
+	summary := h.repo.GetPilotHealthSummary()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+func (h *APIHandler) PromoteEndpointsTier(w http.ResponseWriter, r *http.Request) {
+	var req models.PromoteTierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "MALFORMED_JSON", "Invalid JSON payload for tier promotion", nil)
+		return
+	}
+
+	actor := auth.GetUserID(r.Context())
+	if actor == "" {
+		actor = "admin_operator"
+	}
+
+	count, err := h.repo.PromoteEndpointsTier(req, actor, r.RemoteAddr)
+	if err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "PROMOTION_ERROR", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":         "PROMOTED",
+		"target_tier":    req.TargetTier,
+		"promoted_count": count,
+		"justification":  req.Justification,
+		"promoted_at":    time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *APIHandler) BulkAssignEndpointsTier(w http.ResponseWriter, r *http.Request) {
+	var req models.BulkAssignTierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "MALFORMED_JSON", "Invalid JSON payload for bulk tier assignment", nil)
+		return
+	}
+
+	actor := auth.GetUserID(r.Context())
+	if actor == "" {
+		actor = "admin_operator"
+	}
+
+	count, err := h.repo.BulkAssignEndpointsTier(req, actor, r.RemoteAddr)
+	if err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "BULK_ASSIGN_ERROR", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":         "ASSIGNED",
+		"assigned_tier":  req.RolloutTier,
+		"affected_count": count,
+		"justification":  req.Justification,
+		"assigned_at":    time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *APIHandler) UpdateEndpointRolloutTier(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Tier          string `json:"tier"`
+		Justification string `json:"justification"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "MALFORMED_JSON", "Invalid JSON payload", nil)
+		return
+	}
+
+	actor := auth.GetUserID(r.Context())
+	if actor == "" {
+		actor = "admin_operator"
+	}
+
+	if err := h.repo.UpdateEndpointRolloutTier(id, req.Tier, req.Justification, actor, r.RemoteAddr); err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "UPDATE_TIER_ERROR", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":        "UPDATED",
+		"endpoint_id":   id,
+		"tier":          req.Tier,
+		"justification": req.Justification,
+		"updated_at":    time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *APIHandler) GetRolloutSettings(w http.ResponseWriter, r *http.Request) {
+	settings := h.repo.GetRolloutSettings()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(settings)
+}
+
+func (h *APIHandler) UpdateRolloutSettings(w http.ResponseWriter, r *http.Request) {
+	var settings models.RolloutSettings
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "MALFORMED_JSON", "Invalid JSON payload", nil)
+		return
+	}
+
+	actor := auth.GetUserID(r.Context())
+	if actor == "" {
+		actor = "admin_operator"
+	}
+
+	h.repo.UpdateRolloutSettings(settings, actor, r.RemoteAddr)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":     "UPDATED",
+		"settings":   settings,
+		"updated_at": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 func (h *APIHandler) GetEndpointByID(w http.ResponseWriter, r *http.Request) {

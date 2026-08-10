@@ -1,3 +1,5 @@
+export type RolloutTier = "pilot" | "staged" | "full";
+
 export interface Endpoint {
   id: string;
   hostname: string;
@@ -13,11 +15,52 @@ export interface Endpoint {
   status: "online" | "offline" | "scanning" | "error";
   agentless_protocol: string;
   compliance_score: number;
+  rollout_tier: RolloutTier;
+  organizational_unit?: string;
+  subnet_cidr?: string;
+  tier_promoted_at?: string;
+  tier_promoted_by?: string;
+  tier_promotion_reason?: string;
   open_vulns_count?: number;
   critical_vulns_count?: number;
   last_scanned_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface PilotHealthSummary {
+  total_pilot_hosts: number;
+  online_pilot_hosts: number;
+  scan_success_rate: number;
+  auth_failure_count: number;
+  lockout_risk_count: number;
+  edr_alert_correlation_count: number;
+  average_scan_duration_ms: number;
+  average_compliance_score: number;
+  pilot_hosts: Endpoint[];
+}
+
+export interface PromoteTierRequest {
+  target_tier: "staged" | "full";
+  justification: string;
+  endpoint_ids?: string[];
+  subnet_cidr?: string;
+  organizational_unit?: string;
+}
+
+export interface BulkAssignTierRequest {
+  rollout_tier: RolloutTier;
+  justification: string;
+  subnet_cidr?: string;
+  organizational_unit?: string;
+  endpoint_ids?: string[];
+}
+
+export interface RolloutSettings {
+  active_tiers: RolloutTier[];
+  schedule_enforce_tiers: boolean;
+  updated_at?: string;
+  updated_by?: string;
 }
 
 export interface CPUDetails {

@@ -180,3 +180,11 @@ func GetUserClaims(ctx context.Context) (*UserClaims, bool) {
 	claims, ok := ctx.Value(claimsContextKey).(*UserClaims)
 	return claims, ok
 }
+
+// GetUserID extracts the authenticated user ID from context.
+func GetUserID(ctx context.Context) string {
+	if claims, ok := GetUserClaims(ctx); ok && claims != nil && claims.UserID != "" {
+		return claims.UserID
+	}
+	return "admin_operator"
+}
