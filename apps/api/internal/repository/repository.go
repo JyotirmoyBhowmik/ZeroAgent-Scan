@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/drift"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/models"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vault"
 	"github.com/google/uuid"
@@ -23,6 +24,7 @@ type Repository struct {
 	auditLogs       []models.SecurityAuditLog
 	snapshots       map[string]*models.HostSnapshotEntry
 	rolloutSettings models.RolloutSettings
+	alertHealth     models.AlertHealthStatus
 }
 
 func NewRepository() *Repository {
@@ -41,6 +43,13 @@ func NewRepository() *Repository {
 			ScheduleEnforceTiers: true,
 			UpdatedAt:            time.Now().UTC(),
 			UpdatedBy:            "system_init",
+		},
+		alertHealth: models.AlertHealthStatus{
+			LastTestAlertStatus:    "NEVER_TESTED",
+			TestAlertLapseDays:     999,
+			TestAlertLapsed:        true,
+			ConfiguredWebhookCount: 1,
+			ActiveAlertRulesCount:  3,
 		},
 	}
 
@@ -1191,4 +1200,60 @@ func (r *Repository) ListAuditLogsKeyset(tenantID string, req KeysetPageRequest)
 		HasMore:    hasMore,
 		Limit:      limit,
 	}, nil
+}
+
+// GetAlertHealthStatus returns the current alert verification and delivery health state.
+func (r *Repository) GetAlertHealthStatus() models.AlertHealthStatus {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	health := r.alertHealth
+	if health.LastTestAlertAt != nil {
+		days := int(time.Since(*health.LastTestAlertAt).Hours() / 24)
+		health.TestAlertLapseDays = days
+		health.TestAlertLapsed = (days >= 90 || health.LastTestAlertStatus != "DELIVERED")
+	} else {
+		health.TestAlertLapsed = true
+		health.TestAlertLapseDays = 999
+	}
+	return health
+}
+
+// RecordTestAlertResult updates the health metrics and appends an immutable audit log entry.
+func (r *Repository) RecordTestAlertResult(resp *drift.TestAlertResponse, operator string, ipAddr string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now().UTC()
+	r.alertHealth.LastTestAlertAt = &now
+	r.alertHealth.LastTestAlertStatus = resp.Status
+	r.alertHealth.LastTestAlertOperator = operator
+	r.alertHealth.LastTestAlertTargetURL = resp.TargetURL
+	r.alertHealth.LastTestAlertReceipt = resp.VerificationReceipt
+	r.alertHealth.TestAlertLapseDays = 0
+	r.alertHealth.TestAlertLapsed = (resp.Status != "DELIVERED")
+
+	// Append immutable audit log
+	logID := fmt.Sprintf("audit-alert-%d", time.Now().UnixNano())
+	r.auditLogs = append(r.auditLogs, models.SecurityAuditLog{
+		ID:            logID,
+		CorrelationID: fmt.Sprintf("corr-%s", resp.DeliveryID),
+		Timestamp:     now,
+		Actor:         operator,
+		Action:        "TEST_ALERT_DISPATCHED",
+		ResourceType:  "alert_verification",
+		ResourceID:    resp.DeliveryID,
+		IPAddress:     ipAddr,
+		Status:        resp.Status,
+		Details: map[string]interface{}{
+			"delivery_id":          resp.DeliveryID,
+			"verification_receipt": resp.VerificationReceipt,
+			"target_url":           resp.TargetURL,
+			"http_status_code":     resp.StatusCode,
+			"duration_ms":          resp.DurationMs,
+			"error_message":        resp.ErrorMessage,
+			"alert_notice":         resp.AlertNotice,
+			"is_synthetic_test":    true,
+		},
+	})
 }

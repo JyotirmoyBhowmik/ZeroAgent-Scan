@@ -210,3 +210,15 @@ type RolloutSettings struct {
 	UpdatedBy            string   `json:"updated_by"`
 }
 
+type AlertHealthStatus struct {
+	LastTestAlertAt        *time.Time `json:"last_test_alert_at,omitempty"`
+	LastTestAlertStatus    string     `json:"last_test_alert_status"` // "DELIVERED", "FAILED", "NEVER_TESTED"
+	LastTestAlertOperator  string     `json:"last_test_alert_operator,omitempty"`
+	LastTestAlertTargetURL string     `json:"last_test_alert_target_url,omitempty"`
+	LastTestAlertReceipt   string     `json:"last_test_alert_receipt,omitempty"`
+	TestAlertLapseDays     int        `json:"test_alert_lapse_days"`
+	TestAlertLapsed        bool       `json:"test_alert_lapsed"` // true if > 90 days or never tested
+	ConfiguredWebhookCount int        `json:"configured_webhook_count"`
+	ActiveAlertRulesCount  int        `json:"active_alert_rules_count"`
+}
+

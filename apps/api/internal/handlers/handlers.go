@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -22,14 +23,15 @@ import (
 )
 
 type APIHandler struct {
-	repo             *repository.Repository
-	vaultManager     *vault.VaultManager
-	findingRepo      vulnscan.FindingRepository
-	complianceRepo   compliance.ComplianceRepository
-	complianceEngine *compliance.ComplianceEngine
-	driftRepo        drift.DriftRepository
-	driftWorker      *drift.DriftWorker
-	reportGen        *reports.ReportGenerator
+	repo              *repository.Repository
+	vaultManager      *vault.VaultManager
+	findingRepo       vulnscan.FindingRepository
+	complianceRepo    compliance.ComplianceRepository
+	complianceEngine  *compliance.ComplianceEngine
+	driftRepo         drift.DriftRepository
+	driftWorker       *drift.DriftWorker
+	reportGen         *reports.ReportGenerator
+	webhookDispatcher *drift.WebhookDispatcher
 }
 
 func NewAPIHandler(
@@ -48,16 +50,74 @@ func NewAPIHandler(
 	if driftRepo == nil {
 		driftRepo = drift.NewMemoryDriftRepository()
 	}
+	dispatcher := drift.NewWebhookDispatcher(nil, 2)
 	return &APIHandler{
-		repo:             repo,
-		vaultManager:     vm,
-		findingRepo:      findingRepo,
-		complianceRepo:   compRepo,
-		complianceEngine: compliance.NewComplianceEngine(compRepo),
-		driftRepo:        driftRepo,
-		driftWorker:      drift.NewDriftWorker(driftRepo, nil),
-		reportGen:        reports.NewReportGenerator(repo, findingRepo, compRepo, driftRepo),
+		repo:              repo,
+		vaultManager:      vm,
+		findingRepo:       findingRepo,
+		complianceRepo:    compRepo,
+		complianceEngine:  compliance.NewComplianceEngine(compRepo),
+		driftRepo:         driftRepo,
+		driftWorker:       drift.NewDriftWorker(driftRepo, dispatcher),
+		reportGen:         reports.NewReportGenerator(repo, findingRepo, compRepo, driftRepo),
+		webhookDispatcher: dispatcher,
 	}
+}
+
+func (h *APIHandler) SendTestAlert(w http.ResponseWriter, r *http.Request) {
+	var req drift.TestAlertRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	actor := auth.GetUserID(r.Context())
+	if actor == "" {
+		actor = "admin_operator"
+	}
+
+	targetURL := req.WebhookURL
+	secretKey := req.SecretKey
+	if targetURL == "" {
+		rules := h.driftRepo.ListAlertRules(auth.GetTenantID(r.Context()))
+		for _, rule := range rules {
+			if rule.IsActive && rule.WebhookURL != "" {
+				targetURL = rule.WebhookURL
+				if secretKey == "" {
+					secretKey = rule.SecretKey
+				}
+				break
+			}
+		}
+	}
+
+	if targetURL == "" {
+		targetURL = "https://hooks.slack.com/services/SYNTHETIC_TEST_ALERT"
+	}
+
+	if h.webhookDispatcher == nil {
+		h.webhookDispatcher = drift.NewWebhookDispatcher(nil, 2)
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	defer cancel()
+
+	resp, err := h.webhookDispatcher.DispatchTestAlert(ctx, targetURL, secretKey, actor, req.TestReason)
+	if err != nil && resp == nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadGateway, "DISPATCH_FAILED", err.Error(), nil)
+		return
+	}
+
+	// Record result to repository and immutable security_audit_log
+	h.repo.RecordTestAlertResult(resp, actor, r.RemoteAddr)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (h *APIHandler) GetAlertHealthStatus(w http.ResponseWriter, r *http.Request) {
+	health := h.repo.GetAlertHealthStatus()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(health)
 }
 
 // ---------------------------------------------------------------------------

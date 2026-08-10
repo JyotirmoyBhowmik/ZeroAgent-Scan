@@ -63,6 +63,38 @@ export interface RolloutSettings {
   updated_by?: string;
 }
 
+export interface AlertHealthStatus {
+  last_test_alert_at?: string;
+  last_test_alert_status: "DELIVERED" | "FAILED" | "NEVER_TESTED";
+  last_test_alert_operator?: string;
+  last_test_alert_target_url?: string;
+  last_test_alert_receipt?: string;
+  test_alert_lapse_days: number;
+  test_alert_lapsed: boolean;
+  configured_webhook_count: number;
+  active_alert_rules_count: number;
+}
+
+export interface TestAlertRequest {
+  webhook_url?: string;
+  secret_key?: string;
+  channel?: "WEBHOOK" | "SLACK" | "TEAMS" | "EMAIL";
+  test_reason?: string;
+}
+
+export interface TestAlertResponse {
+  status: "DELIVERED" | "FAILED" | "TIMEOUT";
+  target_url: string;
+  status_code: number;
+  duration_ms: number;
+  delivery_id: string;
+  verification_receipt: string;
+  error_message?: string;
+  tested_at: string;
+  tested_by: string;
+  alert_notice: string;
+}
+
 export interface CPUDetails {
   name?: string;
   architecture?: string;

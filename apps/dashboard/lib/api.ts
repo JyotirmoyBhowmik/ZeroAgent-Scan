@@ -17,6 +17,9 @@ import {
   PromoteTierRequest,
   BulkAssignTierRequest,
   RolloutSettings,
+  AlertHealthStatus,
+  TestAlertRequest,
+  TestAlertResponse,
 } from "./types";
 import {
   MOCK_METRICS,
@@ -473,5 +476,45 @@ export const api = {
       }
     } catch {}
     return { status: "UPDATED", settings };
+  },
+  fetchAlertHealthStatus: async (): Promise<AlertHealthStatus> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/health/status`, {
+        headers: { "X-Tenant-ID": "tenant-default-01" },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      last_test_alert_status: "NEVER_TESTED",
+      test_alert_lapse_days: 999,
+      test_alert_lapsed: true,
+      configured_webhook_count: 1,
+      active_alert_rules_count: 3,
+    };
+  },
+  sendTestAlert: async (req: TestAlertRequest): Promise<TestAlertResponse> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/health/test-alert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
+        body: JSON.stringify(req),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      status: "DELIVERED",
+      target_url: req.webhook_url || "https://hooks.slack.com/services/SYNTHETIC_TEST_ALERT",
+      status_code: 200,
+      duration_ms: 64,
+      delivery_id: `test-${Date.now()}`,
+      verification_receipt: `RECEIPT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+      tested_at: new Date().toISOString(),
+      tested_by: "secops_admin",
+      alert_notice: "[SYNTHETIC TEST ALERT - NOT A REAL INCIDENT]",
+    };
   },
 };

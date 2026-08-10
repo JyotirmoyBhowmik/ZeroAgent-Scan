@@ -108,3 +108,38 @@ type DriftListResponse struct {
 	Offset           int          `json:"offset"`
 	Items            []DriftEvent `json:"items"`
 }
+
+// TestAlertPayload defines the human-readable synthetic alert message sent to real webhook receivers.
+type TestAlertPayload struct {
+	AlertNotice         string                 `json:"alert_notice"` // "[SYNTHETIC TEST ALERT - NOT A REAL INCIDENT]"
+	AlertType           string                 `json:"alert_type"`   // "FLEET_FAILURE_RATE_TEST"
+	Message             string                 `json:"message"`
+	DeliveryID          string                 `json:"delivery_id"`
+	TimestampUTC        string                 `json:"timestamp_utc"`
+	Operator            string                 `json:"triggered_by_operator"`
+	System              string                 `json:"system"`
+	SimulatedMetrics    map[string]interface{} `json:"simulated_metrics"`
+	VerificationReceipt string                 `json:"verification_receipt"`
+}
+
+// TestAlertRequest specifies the parameters for firing a test alert.
+type TestAlertRequest struct {
+	WebhookURL    string `json:"webhook_url,omitempty"`
+	SecretKey     string `json:"secret_key,omitempty"`
+	Channel       string `json:"channel,omitempty"` // "WEBHOOK", "SLACK", "TEAMS", "EMAIL"
+	TestReason    string `json:"test_reason,omitempty"`
+}
+
+// TestAlertResponse returns the delivery result of the synthetic test alert.
+type TestAlertResponse struct {
+	Status              string    `json:"status"` // "DELIVERED", "FAILED", "TIMEOUT"
+	TargetURL           string    `json:"target_url"`
+	StatusCode          int       `json:"status_code"`
+	DurationMs          int64     `json:"duration_ms"`
+	DeliveryID          string    `json:"delivery_id"`
+	VerificationReceipt string    `json:"verification_receipt"`
+	ErrorMessage        string    `json:"error_message,omitempty"`
+	TestedAt            time.Time `json:"tested_at"`
+	TestedBy            string    `json:"tested_by"`
+	AlertNotice         string    `json:"alert_notice"`
+}

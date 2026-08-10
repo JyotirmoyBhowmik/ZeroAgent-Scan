@@ -16,14 +16,15 @@ import {
   RefreshCw,
   AlertCircle,
 } from "lucide-react";
-import { getFleetMetrics, getDriftEvents, getEndpoints, getNetworkSubnets } from "@/lib/api";
-import { FleetMetrics, DriftEvent, Endpoint, NetworkSubnet } from "@/lib/types";
+import { getFleetMetrics, getDriftEvents, getEndpoints, getNetworkSubnets, api } from "@/lib/api";
+import { FleetMetrics, DriftEvent, Endpoint, NetworkSubnet, AlertHealthStatus } from "@/lib/types";
 
 export default function FleetOverviewPage() {
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [driftEvents, setDriftEvents] = useState<DriftEvent[]>([]);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [subnets, setSubnets] = useState<NetworkSubnet[]>([]);
+  const [alertHealth, setAlertHealth] = useState<AlertHealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,16 +32,18 @@ export default function FleetOverviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const [m, d, e, s] = await Promise.all([
+      const [m, d, e, s, h] = await Promise.all([
         getFleetMetrics(),
         getDriftEvents(),
         getEndpoints(),
         getNetworkSubnets(),
+        api.fetchAlertHealthStatus(),
       ]);
       setMetrics(m);
       setDriftEvents(d);
       setEndpoints(e);
       setSubnets(s);
+      setAlertHealth(h);
     } catch (err: any) {
       setError(err?.message || "Failed to load fleet telemetry.");
     } finally {
@@ -144,6 +147,33 @@ export default function FleetOverviewPage() {
               Recommend deploying TLS certificates on port 5986 and disabling port 5985 overrides.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Alert Delivery Verification Lapse Warning */}
+      {alertHealth && alertHealth.test_alert_lapsed && (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center justify-between gap-4 text-rose-200 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-rose-500/20 text-rose-400">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-rose-300 text-sm">
+                ⚠️ Action Recommended: Human Alert Delivery Testing Lapsed (90+ Days / Untested)
+              </h3>
+              <p className="mt-0.5 text-slate-300">
+                {alertHealth.last_test_alert_at
+                  ? `Last verified alert delivery was ${alertHealth.test_alert_lapse_days} days ago. Synthetic testing must be executed every 90 days.`
+                  : "No synthetic alert test has been recorded yet. Verify that critical fleet failure alerts reach on-call personnel."}
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/admin"
+            className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold shrink-0 transition-colors"
+          >
+            Send Test Alert
+          </Link>
         </div>
       )}
 

@@ -195,6 +195,8 @@ func main() {
 			protected.With(auth.RequirePermission(auth.PermissionManageAlerts)).Get("/alerts/rules", apiHandler.ListAlertRules)
 			protected.With(auth.RequirePermission(auth.PermissionManageAlerts)).Post("/alerts/rules", apiHandler.CreateAlertRule)
 			protected.With(auth.RequirePermission(auth.PermissionManageAlerts)).Get("/alerts/deliveries", apiHandler.ListWebhookDeliveryLogs)
+			protected.With(auth.RequirePermission(auth.PermissionManageAlerts)).Post("/admin/health/test-alert", apiHandler.SendTestAlert)
+			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/admin/health/status", apiHandler.GetAlertHealthStatus)
 
 			// Executive & Compliance Reports
 			protected.With(auth.RequirePermission(auth.PermissionGenerateReports)).Post("/reports", apiHandler.GenerateReport)
