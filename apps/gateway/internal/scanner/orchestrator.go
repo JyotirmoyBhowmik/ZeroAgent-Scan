@@ -2,9 +2,11 @@ package scanner
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -37,7 +39,7 @@ func NewScanOrchestrator(
 	}
 }
 
-// ExecuteScanJob processes all targets in a scan job under rate-limited concurrency.
+// ExecuteScanJob processes all targets in a scan job using a bounded worker pool.
 func (o *ScanOrchestrator) ExecuteScanJob(ctx context.Context, jobID, targetCIDR, protocol, secretRef string, targets []string, allowInsecureHTTP bool) (*ScanBatchResult, error) {
 	start := time.Now().UTC()
 	var logs []string
@@ -61,65 +63,68 @@ func (o *ScanOrchestrator) ExecuteScanJob(ctx context.Context, jobID, targetCIDR
 	}
 
 	totalHosts := len(targets)
-	logs = append(logs, fmt.Sprintf("[%s] [INFO] Probing %d hosts across %s (Rate Limit: %d concurrent sessions)", time.Now().UTC().Format(time.RFC3339), totalHosts, targetCIDR, o.rateLimiter.Capacity()))
+	logs = append(logs, fmt.Sprintf("[%s] [INFO] Queuing %d hosts across %s for bounded worker pool execution", time.Now().UTC().Format(time.RFC3339), totalHosts, targetCIDR))
 
-	var mu sync.Mutex
-	var results []EndpointScanResult
-	var wg sync.WaitGroup
+	// Prepare targets
+	scanTargets := make([]EndpointScanTarget, 0, len(targets))
+	for _, ip := range targets {
+		scanTargets = append(scanTargets, EndpointScanTarget{
+			IPAddress:         ip,
+			Protocol:          protocol,
+			Username:          "svc_scan_winrm",
+			SecretValue:       secretValue,
+			AllowInsecureHTTP: allowInsecureHTTP,
+		})
+	}
+
+	// Configure Bounded Worker Pool with concurrency from rate limiter
+	concurrency := 25
+	if o.rateLimiter != nil && o.rateLimiter.Capacity() > 0 {
+		concurrency = o.rateLimiter.Capacity()
+	}
+
+	poolOpts := WorkerPoolOptions{
+		Concurrency:     concurrency,
+		TargetTimeout:   15 * time.Second,
+		MaxRetries:      2,
+		BackoffBase:     300 * time.Millisecond,
+		MaxBackoffLimit: 3 * time.Second,
+	}
+
+	// Define scan execution function per target
+	scanFn := func(scanCtx context.Context, target EndpointScanTarget) (*EndpointScanResult, error) {
+		if protocol == "ssh" || protocol == "ssh_snmp" {
+			return o.bmcScanner.ScanSSH(scanCtx, target, "SHA256:4a8f9b2c3d1e5a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b")
+		} else if protocol == "snmp_v3" {
+			return o.bmcScanner.ScanSNMPv3(scanCtx, target, "authPriv", "SHA256", "AES256")
+		}
+		return o.winrmScanner.ScanEndpoint(scanCtx, target)
+	}
+
+	pool := NewBoundedWorkerPool(poolOpts, scanFn)
+	results, poolLogs := pool.Execute(ctx, scanTargets)
+	logs = append(logs, poolLogs...)
 
 	compliantCount := 0
 	failedCount := 0
-
-	for _, host := range targets {
-		wg.Add(1)
-		go func(ip string) {
-			defer wg.Done()
-
-			target := EndpointScanTarget{
-				IPAddress:         ip,
-				Protocol:          protocol,
-				Username:          "svc_scan_winrm",
-				SecretValue:       secretValue,
-				AllowInsecureHTTP: allowInsecureHTTP,
-			}
-
-			// Rate limit execution
-			_ = o.rateLimiter.Execute(ctx, func() error {
-				var res *EndpointScanResult
-				var err error
-
-				if protocol == "ssh" || protocol == "ssh_snmp" {
-					res, err = o.bmcScanner.ScanSSH(ctx, target, "SHA256:4a8f9b2c3d1e5a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b")
-				} else if protocol == "snmp_v3" {
-					res, err = o.bmcScanner.ScanSNMPv3(ctx, target, "authPriv", "SHA256", "AES256")
-				} else {
-					res, err = o.winrmScanner.ScanEndpoint(ctx, target)
-				}
-
-				mu.Lock()
-				defer mu.Unlock()
-
-				if err != nil {
-					failedCount++
-					if res != nil {
-						results = append(results, *res)
-					}
-					logs = append(logs, fmt.Sprintf("[%s] [WARN] Host %s probe failed: %v", time.Now().UTC().Format(time.RFC3339), ip, err))
-				} else {
-					if res.ComplianceScore >= 80.0 {
-						compliantCount++
-					}
-					results = append(results, *res)
-					logs = append(logs, fmt.Sprintf("[%s] [INFO] Host %s scanned successfully (Score: %.1f%%)", time.Now().UTC().Format(time.RFC3339), ip, res.ComplianceScore))
-				}
-				return nil
-			})
-		}(host)
+	for _, res := range results {
+		if res.Status == "error" || res.Status == "offline" || res.Status == "auth_error" {
+			failedCount++
+		} else if res.ComplianceScore >= 80.0 {
+			compliantCount++
+		}
 	}
 
-	wg.Wait()
 	completedAt := time.Now().UTC()
-	logs = append(logs, fmt.Sprintf("[%s] [INFO] Scan job %s completed. Scanned: %d, Compliant: %d, Failed: %d", completedAt.Format(time.RFC3339), jobID, len(results), compliantCount, failedCount))
+	logs = append(logs, fmt.Sprintf("[%s] [INFO] Scan job %s completed in %s. Scanned: %d, Compliant: %d, Failed: %d",
+		completedAt.Format(time.RFC3339), jobID, completedAt.Sub(start).Round(time.Millisecond), len(results), compliantCount, failedCount))
+
+	// Compute deterministic SHA-256 payload hash
+	var payloadHash string
+	if b, err := json.Marshal(results); err == nil {
+		h := sha256.Sum256(b)
+		payloadHash = hex.EncodeToString(h[:])
+	}
 
 	return &ScanBatchResult{
 		ScanJobID:      jobID,
@@ -131,6 +136,7 @@ func (o *ScanOrchestrator) ExecuteScanJob(ctx context.Context, jobID, targetCIDR
 		FailedHosts:    failedCount,
 		Results:        results,
 		Logs:           logs,
+		PayloadHash:    payloadHash,
 		CompletedAt:    completedAt,
 	}, nil
 }
