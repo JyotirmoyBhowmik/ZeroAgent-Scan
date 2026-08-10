@@ -6,6 +6,18 @@ EndpointGuard audits, inventories, and verifies security compliance for entire e
 
 ---
 
+## 🚀 Production Deployment & Operations
+
+For on-premises enterprise production deployment on Windows Server 2019/2022/2025:
+
+- **[Step-by-Step Production Deployment Guide](file:///C:/Users/TEST/ZeroAgent%20Scan/docs/deployment/DEPLOYMENT.md)** — Canonical, beginner-friendly walkthrough covering PostgreSQL 17, Node.js 26 LTS, NSSM services, and IIS reverse proxy.
+- **[Deployment Prerequisites & Sizing](file:///C:/Users/TEST/ZeroAgent%20Scan/docs/deployment/PREREQUISITES.md)** — Hardware sizing for ~400 endpoints, firewall change request tables, and pre-flight checklists.
+- **[Post-Installation Go/No-Go Validation](file:///C:/Users/TEST/ZeroAgent%20Scan/docs/deployment/POST-INSTALL-VALIDATION.md)** — 8-pillar operational readiness checklist and pilot scan validation.
+- **[Gaps, Assumptions & Technical Debt Audit](file:///C:/Users/TEST/ZeroAgent%20Scan/docs/deployment/GAPS-AND-ASSUMPTIONS.md)** — Comprehensive audit of certificate renewal, reboot handling, log rotation, and operational boundaries.
+- **[Operations Runbook](file:///C:/Users/TEST/ZeroAgent%20Scan/RUNBOOK.md)** — Day-2 operations, credential rotation, backup/restore drills, and emergency procedures.
+
+---
+
 ## 🏛️ System Architecture
 
 ```mermaid

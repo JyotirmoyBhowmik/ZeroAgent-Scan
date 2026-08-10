@@ -1,16 +1,25 @@
 <#
 .SYNOPSIS
-    Idempotent Production Installation & Provisioning Script for ZeroAgent-Scan on Windows Server 2016.
+    Idempotent Production Installation & Provisioning Script for ZeroAgent-Scan (EndpointGuard EMS) on Windows Server 2019.
 .DESCRIPTION
-    Installs prerequisites (Node.js LTS, PostgreSQL 15, NSSM), provisions least-privilege service accounts,
-    configures PostgreSQL, registers NSSM Windows Services, configures IIS reverse proxy / standalone mode,
-    and scopes Windows Firewall rules.
+    Installs prerequisites (Node.js LTS, NSSM), provisions least-privilege service accounts,
+    registers NSSM Windows Services (API & Dashboard), configures IIS reverse proxy features,
+    and scopes Windows Defender Firewall rules.
+
+    VERSION SELECTION LOGIC (Audit Date: August 2026):
+    - Node.js: 26.x (Current / October 2026 LTS -> EOL April 30, 2029).
+      Rationale: Only LTS-track line whose support window fully covers Windows Server 2019
+      Extended Support End Date (January 9, 2029). Node.js 24 LTS expires April 30, 2028 (9 months short).
+    - PostgreSQL: 17.x (Released September 2024 -> EOL November 2029).
+      Rationale: PostgreSQL 17 provides 10 months of runway past Windows Server 2019 EOL (Jan 2029)
+      with mature enterprise production stability. PostgreSQL 18 (EOL Nov 2030) is also supported.
+    - NSSM: 2.24 (Service Manager).
 .PARAMETER ConfigPath
     Path to deploy.config.json. Defaults to .\deploy.config.json.
 .PARAMETER ServeMode
     Frontend hosting mode: 'IIS' (recommended) or 'Standalone'.
 .PARAMETER DBPassword
-    PostgreSQL password for zeroagent_app (pulled from secret vault).
+    PostgreSQL password for database service user (pulled from secret vault / secure prompt).
 .PARAMETER ServiceAccountPassword
     Password for .\svc_zeroagent service account.
 .EXAMPLE
@@ -27,6 +36,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# ===========================================================================
+# 0. CANONICAL VERSION DEFINITIONS & RUNWAY VALIDATION
+# ===========================================================================
+# Target Platform: Windows Server 2019 (Extended Support End: 2029-01-09)
+$TARGET_NODE_VERSION_LABEL = "Node.js 26.x LTS"
+$TARGET_NODE_MSI_URL       = "https://nodejs.org/dist/v26.0.0/node-v26.0.0-x64.msi" # Fallback mirror
+$TARGET_PG_VERSION_LABEL   = "PostgreSQL 17.x (EOL Nov 2029)"
+$TARGET_NSSM_VERSION_LABEL = "NSSM 2.24"
+$TARGET_NSSM_ZIP_URL       = "https://nssm.cc/release/nssm-2.24.zip"
 
 # ---------------------------------------------------------------------------
 # 1. Setup Logging & Read Config
@@ -54,19 +73,24 @@ function Log-Message {
 }
 
 Log-Message "INFO" "=========================================================================="
-Log-Message "INFO" "Starting ZeroAgent-Scan Production Installation on Windows Server 2016"
+Log-Message "INFO" "Starting ZeroAgent-Scan Production Installation on Windows Server 2019"
 Log-Message "INFO" "Target Install Path : $InstallPath"
+Log-Message "INFO" "Node.js Target      : $TARGET_NODE_VERSION_LABEL"
+Log-Message "INFO" "PostgreSQL Target   : $TARGET_PG_VERSION_LABEL"
 Log-Message "INFO" "Frontend Mode       : $ServeMode"
 Log-Message "INFO" "Audit Log File      : $LogFile"
 Log-Message "INFO" "=========================================================================="
 
 # ---------------------------------------------------------------------------
-# 2. Verify Administrative Privileges
+# 2. Verify Administrative Privileges & OS Version
 # ---------------------------------------------------------------------------
 $CurrentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $CurrentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw "This installation script must be executed in an elevated (Administrator) PowerShell session."
 }
+
+$OSInfo = Get-CimInstance Win32_OperatingSystem
+Log-Message "INFO" "Detected OS: $($OSInfo.Caption) (Build $($OSInfo.BuildNumber))"
 
 # ---------------------------------------------------------------------------
 # 3. Create Application Directory Structure
@@ -78,7 +102,10 @@ $Directories = @(
     (Join-Path $InstallPath "gateway"),
     (Join-Path $InstallPath "logs"),
     (Join-Path $InstallPath "temp"),
-    $Config.application.backup_path
+    (Join-Path $InstallPath "certs"),
+    (Join-Path $InstallPath "deploy"),
+    $Config.application.backup_path,
+    $Config.snapshot_retention.cold_storage_path
 )
 
 foreach ($Dir in $Directories) {
@@ -91,7 +118,7 @@ foreach ($Dir in $Directories) {
 # ---------------------------------------------------------------------------
 # 4. Check & Install Runtime Prerequisites
 # ---------------------------------------------------------------------------
-Log-Message "INFO" "Checking runtime prerequisites (Node.js 22 LTS, PostgreSQL 17, NSSM)..."
+Log-Message "INFO" "Checking runtime prerequisites ($TARGET_NODE_VERSION_LABEL, $TARGET_NSSM_VERSION_LABEL)..."
 
 # A. Node.js Verification
 $NodeInstalled = $false
@@ -104,13 +131,16 @@ try {
 } catch {}
 
 if (-not $NodeInstalled) {
-    Log-Message "WARN" "Node.js not detected. Downloading Node.js LTS v22 MSI..."
-    $NodeMsiPath = Join-Path $Config.application.temp_path "node-v22-x64.msi"
-    $NodeUrl = "https://nodejs.org/dist/v22.14.0/node-v22.14.0-x64.msi"
-    Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeMsiPath -UseBasicParsing
-    Log-Message "INFO" "Installing Node.js 22 LTS silently via msiexec..."
-    Start-Process msiexec.exe -ArgumentList "/i `"$NodeMsiPath`" /qn /norestart" -Wait -NoNewWindow
-    Log-Message "INFO" "Node.js installation completed."
+    Log-Message "WARN" "Node.js not detected. Downloading $TARGET_NODE_VERSION_LABEL MSI..."
+    $NodeMsiPath = Join-Path $Config.application.temp_path "node-x64.msi"
+    try {
+        Invoke-WebRequest -Uri $TARGET_NODE_MSI_URL -OutFile $NodeMsiPath -UseBasicParsing
+        Log-Message "INFO" "Installing Node.js silently via msiexec..."
+        Start-Process msiexec.exe -ArgumentList "/i `"$NodeMsiPath`" /qn /norestart" -Wait -NoNewWindow
+        Log-Message "INFO" "Node.js installation completed."
+    } catch {
+        Log-Message "ERROR" "Automated Node.js download failed. Please pre-install Node.js 26.x manually."
+    }
 }
 
 # B. NSSM Verification (Non-Sucking Service Manager)
@@ -120,10 +150,19 @@ if (-not (Test-Path $NSSMPath)) {
     $NSSMDir = "C:\tools\nssm"
     if (-not (Test-Path $NSSMDir)) { New-Item -Path $NSSMDir -ItemType Directory -Force | Out-Null }
     $NSSMZip = Join-Path $Config.application.temp_path "nssm.zip"
-    Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile $NSSMZip -UseBasicParsing
-    Expand-Archive -Path $NSSMZip -DestinationPath (Join-Path $Config.application.temp_path "nssm_extracted") -Force
-    Copy-Item (Join-Path $Config.application.temp_path "nssm_extracted\nssm-2.24\win64\nssm.exe") -Destination $NSSMPath -Force
-    Log-Message "INFO" "NSSM deployed to $NSSMPath."
+    try {
+        Invoke-WebRequest -Uri $TARGET_NSSM_ZIP_URL -OutFile $NSSMZip -UseBasicParsing
+        Expand-Archive -Path $NSSMZip -DestinationPath (Join-Path $Config.application.temp_path "nssm_extracted") -Force
+        Copy-Item (Join-Path $Config.application.temp_path "nssm_extracted\nssm-2.24\win64\nssm.exe") -Destination $NSSMPath -Force
+        Log-Message "INFO" "NSSM deployed to $NSSMPath."
+    } catch {
+        Log-Message "WARN" "Automated NSSM download failed. Checking if NSSM is available in PATH..."
+        $nssmInPath = Get-Command nssm -ErrorAction SilentlyContinue
+        if ($nssmInPath) {
+            $NSSMPath = $nssmInPath.Source
+            Log-Message "INFO" "Using NSSM from PATH: $NSSMPath"
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -165,38 +204,11 @@ Set-Acl $InstallPath $Acl
 Log-Message "INFO" "Set NTFS Modify permissions for '$SvcUser' on '$InstallPath'."
 
 # ---------------------------------------------------------------------------
-# 6. Database Provisioning (PostgreSQL)
-# ---------------------------------------------------------------------------
-Log-Message "INFO" "Configuring PostgreSQL database '$($Config.database.name)'..."
-# PostgreSQL SQL initialization commands
-$DBName = $Config.database.name
-$DBUser = $Config.database.username
-
-$DBScript = @"
-DO `$do`$
-BEGIN
-   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$DBUser') THEN
-      CREATE ROLE $DBUser LOGIN PASSWORD '$DBUser_Secret_2026';
-   END IF;
-END
-`$do`$;
-
-SELECT 'CREATE DATABASE $DBName WITH OWNER $DBUser'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DBName')\gexec
-
-REVOKE ALL ON DATABASE $DBName FROM PUBLIC;
-GRANT CONNECT ON DATABASE $DBName TO $DBUser;
-"@
-
-$DBScriptPath = Join-Path $Config.application.temp_path "init_db.sql"
-Set-Content -Path $DBScriptPath -Value $DBScript -Encoding ASCII
-
-# ---------------------------------------------------------------------------
-# 7. Register NSSM Windows Services
+# 6. Register NSSM Windows Services
 # ---------------------------------------------------------------------------
 Log-Message "INFO" "Registering NSSM Windows Services (ZeroAgentAPI & ZeroAgentDashboard)..."
 
-# A. ZeroAgent API Service
+# A. ZeroAgent API Service (Go compiled binary)
 $APIServiceName = "ZeroAgentAPI"
 $APIBinary = Join-Path $InstallPath "api\server.exe"
 if (Test-Path $APIBinary) {
@@ -209,23 +221,49 @@ if (Test-Path $APIBinary) {
     & $NSSMPath set $APIServiceName AppStderr (Join-Path $LogPath "api_stderr.log")
     & $NSSMPath set $APIServiceName Start SERVICE_AUTO_START
     & $NSSMPath set $APIServiceName AppRestartDelay 5000
+    & $NSSMPath set $APIServiceName AppRotateFiles 1
+    & $NSSMPath set $APIServiceName AppRotateBytes 52428800
+    & $NSSMPath set $APIServiceName AppRotateOnline 1
     & $NSSMPath start $APIServiceName
     Log-Message "INFO" "Registered and started Windows Service: $APIServiceName"
 } else {
     Log-Message "WARN" "API executable not found at '$APIBinary'. Service will be configured during deploy-update.ps1."
 }
 
+# B. ZeroAgent Dashboard Service (Next.js Node application)
+$DashServiceName = "ZeroAgentDashboard"
+$NodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
+if (-not $NodeExe) { $NodeExe = "C:\Program Files\nodejs\node.exe" }
+$DashDir = Join-Path $InstallPath "dashboard"
+
+if (Test-Path $DashDir) {
+    & $NSSMPath stop $DashServiceName 2>$null
+    & $NSSMPath remove $DashServiceName confirm 2>$null
+    & $NSSMPath install $DashServiceName $NodeExe
+    & $NSSMPath set $DashServiceName AppParameters "node_modules\.bin\next start -p 3000"
+    & $NSSMPath set $DashServiceName AppDirectory $DashDir
+    & $NSSMPath set $DashServiceName ObjectName ".\$SvcUser"
+    & $NSSMPath set $DashServiceName AppStdout (Join-Path $LogPath "dashboard_stdout.log")
+    & $NSSMPath set $DashServiceName AppStderr (Join-Path $LogPath "dashboard_stderr.log")
+    & $NSSMPath set $DashServiceName Start SERVICE_AUTO_START
+    & $NSSMPath set $DashServiceName AppRestartDelay 5000
+    & $NSSMPath set $DashServiceName AppRotateFiles 1
+    & $NSSMPath set $DashServiceName AppRotateBytes 52428800
+    & $NSSMPath set $DashServiceName AppRotateOnline 1
+    Log-Message "INFO" "Configured Windows Service: $DashServiceName (run 'nssm start $DashServiceName' after dashboard build)."
+}
+
 # ---------------------------------------------------------------------------
-# 8. Configure IIS Reverse Proxy or Standalone Frontend
+# 7. Configure IIS Reverse Proxy Features
 # ---------------------------------------------------------------------------
 if ($ServeMode -eq "IIS") {
-    Log-Message "INFO" "Configuring IIS Reverse Proxy with ARR & URL Rewrite..."
-    Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServerRole,IIS-WebServer,IIS-ApplicationDevelopment,IIS-NetFxExtensibility45 -All -NoRestart | Out-Null
+    Log-Message "INFO" "Configuring IIS Web Server features..."
+    Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServerRole,IIS-WebServer,IIS-ManagementConsole,IIS-RequestFiltering,IIS-HttpRedirect -All -NoRestart | Out-Null
     Log-Message "INFO" "IIS Web-Server features enabled."
 }
 
 # ---------------------------------------------------------------------------
-# 9. Configure Windows Defender Firewall Rules
+# 8. Configure Windows Defender Firewall Rules
 # ---------------------------------------------------------------------------
 Log-Message "INFO" "Configuring Windows Defender Firewall rules..."
 
@@ -239,14 +277,17 @@ Remove-NetFirewallRule -DisplayName "PostgreSQL-Localhost-Only" -ErrorAction Sil
 New-NetFirewallRule -DisplayName "PostgreSQL-Localhost-Only" `
     -Direction Inbound -Protocol TCP -LocalPort 5432 -RemoteAddress 127.0.0.1 -Action Allow | Out-Null
 
-# Outbound WinRM HTTPS (5986) to scan subnets
+# Outbound WinRM HTTPS (5986), HTTP (5985), RPC (135, 445, 50000-50100) to scan subnets
 Remove-NetFirewallRule -DisplayName "ZeroAgent-Outbound-WinRM" -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName "ZeroAgent-Outbound-WinRM" `
-    -Direction Outbound -Protocol TCP -RemotePort 5986,5985,135,445 -Action Allow -Profile Domain,Private | Out-Null
+    -Direction Outbound -Protocol TCP -RemotePort 5986,5985,135,445,50000-50100 -Action Allow -Profile Domain,Private | Out-Null
 
 Log-Message "INFO" "Windows Firewall rules configured and scoped."
 
 Log-Message "INFO" "=========================================================================="
 Log-Message "INFO" "ZeroAgent-Scan Installation Completed Successfully!"
-Log-Message "INFO" "Next Step: Run .\configure-tls.ps1 to bind SSL certificates and enforce TLS 1.2+"
+Log-Message "INFO" "Next Steps:"
+Log-Message "INFO" "1. Complete PostgreSQL database initialization per docs/deployment/DEPLOYMENT.md"
+Log-Message "INFO" "2. Run .\configure-tls.ps1 to bind SSL certificates and enforce TLS 1.2+"
+Log-Message "INFO" "3. Execute docs/deployment/POST-INSTALL-VALIDATION.md before production go-live"
 Log-Message "INFO" "=========================================================================="
