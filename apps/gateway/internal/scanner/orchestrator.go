@@ -55,9 +55,9 @@ func (o *ScanOrchestrator) ExecuteScanJob(ctx context.Context, jobID, targetCIDR
 		logs = append(logs, fmt.Sprintf("[%s] [INFO] Successfully resolved vault credential ref %s via mTLS", time.Now().UTC().Format(time.RFC3339), secretRef))
 	}
 
-	// Expand CIDR if specific targets not provided
+	// Expand CIDR if specific targets not provided (supports up to 512 hosts for production subnets)
 	if len(targets) == 0 && targetCIDR != "" {
-		targets = expandCIDRHosts(targetCIDR, 16) // sample up to 16 hosts for scan
+		targets = expandCIDRHosts(targetCIDR, 512)
 	}
 
 	totalHosts := len(targets)

@@ -144,7 +144,20 @@ export interface SecurityPosture {
   credential_guard_enabled?: boolean;
   lsa_protection_enabled?: boolean;
   smbv1_disabled?: boolean;
-  rdp_nla_required?: boolean;
+  reboot_pending?: {
+    component_based_servicing?: boolean;
+    windows_update?: boolean;
+    pending_file_rename?: boolean;
+    is_reboot_required?: boolean;
+  };
+  cutover_readiness?: {
+    windows_11_ready?: boolean;
+    tpm20_passed?: boolean;
+    secure_boot_passed?: boolean;
+    ram_passed?: boolean;
+    storage_passed?: boolean;
+    cpu_passed?: boolean;
+  };
   hotfixes: Array<{ hotfix_id?: string; description?: string; installed_on?: string }>;
   local_admins: string[];
 }

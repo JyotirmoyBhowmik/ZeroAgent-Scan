@@ -358,6 +358,20 @@ func extractSecurityTelemetry(m map[string]interface{}) SecurityPostureTelemetry
 		UACStatus: map[string]interface{}{
 			"admin_approval_mode": true,
 		},
+		RebootPending: map[string]interface{}{
+			"component_based_servicing": false,
+			"windows_update":            false,
+			"pending_file_rename":       false,
+			"is_reboot_required":        false,
+		},
+		CutoverReadiness: map[string]interface{}{
+			"windows_11_ready":   true,
+			"tpm20_passed":       true,
+			"secure_boot_passed": true,
+			"ram_passed":         true,
+			"storage_passed":     true,
+			"cpu_passed":         true,
+		},
 		Hotfixes: []map[string]interface{}{
 			{"hotfix_id": "KB5036893", "description": "Security Update", "installed_on": "2024-04-12"},
 		},

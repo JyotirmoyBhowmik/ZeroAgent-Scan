@@ -62,12 +62,14 @@ type HardwareTelemetry struct {
 
 // SecurityPostureTelemetry details collected from BitLocker, Defender, UAC, etc.
 type SecurityPostureTelemetry struct {
-	BitLockerStatus map[string]interface{}   `json:"bitlocker_status"`
-	DefenderStatus  map[string]interface{}   `json:"defender_status"`
-	FirewallStatus  map[string]interface{}   `json:"firewall_status"`
-	UACStatus       map[string]interface{}   `json:"uac_status"`
-	Hotfixes        []map[string]interface{} `json:"hotfixes"`
-	LocalAdmins     []string                 `json:"local_admins"`
+	BitLockerStatus  map[string]interface{}   `json:"bitlocker_status"`
+	DefenderStatus   map[string]interface{}   `json:"defender_status"`
+	FirewallStatus   map[string]interface{}   `json:"firewall_status"`
+	UACStatus        map[string]interface{}   `json:"uac_status"`
+	RebootPending    map[string]interface{}   `json:"reboot_pending,omitempty"`
+	CutoverReadiness map[string]interface{}   `json:"cutover_readiness,omitempty"`
+	Hotfixes         []map[string]interface{} `json:"hotfixes"`
+	LocalAdmins      []string                 `json:"local_admins"`
 }
 
 // CISBenchmarkResult reports compliance for a single CIS check.

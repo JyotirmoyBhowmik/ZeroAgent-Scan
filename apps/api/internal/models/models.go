@@ -36,16 +36,18 @@ type HardwareInventory struct {
 }
 
 type SecurityPosture struct {
-	ID              string                 `json:"id"`
-	EndpointID      string                 `json:"endpoint_id"`
-	BitLockerStatus map[string]interface{} `json:"bitlocker_status"`
-	DefenderStatus  map[string]interface{} `json:"defender_status"`
-	FirewallStatus  map[string]interface{} `json:"firewall_status"`
-	UACStatus       map[string]interface{} `json:"uac_status"`
-	Hotfixes        []map[string]interface{} `json:"hotfixes"`
-	LocalAdmins     []string               `json:"local_admins"`
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
+	ID               string                 `json:"id"`
+	EndpointID       string                 `json:"endpoint_id"`
+	BitLockerStatus  map[string]interface{} `json:"bitlocker_status"`
+	DefenderStatus   map[string]interface{} `json:"defender_status"`
+	FirewallStatus   map[string]interface{} `json:"firewall_status"`
+	UACStatus        map[string]interface{} `json:"uac_status"`
+	RebootPending    map[string]interface{} `json:"reboot_pending,omitempty"`
+	CutoverReadiness map[string]interface{} `json:"cutover_readiness,omitempty"`
+	Hotfixes         []map[string]interface{} `json:"hotfixes"`
+	LocalAdmins      []string               `json:"local_admins"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
 type EndpointDetail struct {
