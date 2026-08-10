@@ -254,6 +254,8 @@ export interface NetworkSubnet {
   host_count: number;
   online_count: number;
   compliant_count: number;
+  allow_insecure_http?: boolean;
+  transport_protocol?: "winrm_https" | "winrm_http" | "dcom_rpc";
   last_scan_at: string;
 }
 

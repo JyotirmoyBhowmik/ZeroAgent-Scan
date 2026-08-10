@@ -16,13 +16,14 @@ import {
   RefreshCw,
   AlertCircle,
 } from "lucide-react";
-import { getFleetMetrics, getDriftEvents, getEndpoints } from "@/lib/api";
-import { FleetMetrics, DriftEvent, Endpoint } from "@/lib/types";
+import { getFleetMetrics, getDriftEvents, getEndpoints, getNetworkSubnets } from "@/lib/api";
+import { FleetMetrics, DriftEvent, Endpoint, NetworkSubnet } from "@/lib/types";
 
 export default function FleetOverviewPage() {
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [driftEvents, setDriftEvents] = useState<DriftEvent[]>([]);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [subnets, setSubnets] = useState<NetworkSubnet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,14 +31,16 @@ export default function FleetOverviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const [m, d, e] = await Promise.all([
+      const [m, d, e, s] = await Promise.all([
         getFleetMetrics(),
         getDriftEvents(),
         getEndpoints(),
+        getNetworkSubnets(),
       ]);
       setMetrics(m);
       setDriftEvents(d);
       setEndpoints(e);
+      setSubnets(s);
     } catch (err: any) {
       setError(err?.message || "Failed to load fleet telemetry.");
     } finally {
@@ -121,6 +124,28 @@ export default function FleetOverviewPage() {
           </Link>
         </div>
       </div>
+
+      {/* Insecure Transport Warning Banner */}
+      {subnets.filter((s) => s.allow_insecure_http).length > 0 && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-3.5 text-amber-200 text-xs">
+          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-bold text-amber-300 text-sm">⚠️ Security Notice: Unencrypted WinRM (Port 5985) Override Active</h3>
+            <p className="mt-1 text-slate-300 leading-relaxed">
+              The following subnets have explicit unencrypted HTTP overrides enabled:{" "}
+              <span className="font-mono font-semibold text-amber-300">
+                {subnets
+                  .filter((s) => s.allow_insecure_http)
+                  .map((s) => `${s.subnet_cidr} (${s.name})`)
+                  .join(", ")}
+              </span>.
+              Unencrypted WinRM transmits sensitive CIM telemetry and authentication hashes across the local network segment in cleartext.
+              Documented as a compliance exception under Rule ID <code className="font-mono bg-slate-900 px-1 py-0.5 rounded text-amber-300">COMPLIANCE_EXCEPTION_WINRM_UNENCRYPTED_5985</code>.
+              Recommend deploying TLS certificates on port 5986 and disabling port 5985 overrides.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Top 4 KPI Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

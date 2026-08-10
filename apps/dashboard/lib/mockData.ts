@@ -397,7 +397,25 @@ export const MOCK_SUBNETS: NetworkSubnet[] = [
     host_count: 6,
     online_count: 6,
     compliant_count: 6,
+    transport_protocol: "winrm_https",
+    allow_insecure_http: false,
     last_scan_at: new Date(Date.now() - 10 * 60000).toISOString(),
+  },
+  {
+    id: "subnet-03",
+    subnet_cidr: "10.100.4.0/24",
+    name: "Legacy Branch Office Lab (Unencrypted Override)",
+    location: "US-West (Branch Office Lab)",
+    assigned_gateway_code: "gw-subnet-10-100-4-0",
+    gateway_name: "Gateway Branch Lab",
+    gateway_status: "degraded",
+    gateway_latency_ms: 145,
+    host_count: 8,
+    online_count: 8,
+    compliant_count: 4,
+    transport_protocol: "winrm_http",
+    allow_insecure_http: true,
+    last_scan_at: new Date(Date.now() - 45 * 60000).toISOString(),
   }
 ];
 
