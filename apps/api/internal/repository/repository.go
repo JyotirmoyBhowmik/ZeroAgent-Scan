@@ -25,6 +25,7 @@ type Repository struct {
 	snapshots       map[string]*models.HostSnapshotEntry
 	rolloutSettings models.RolloutSettings
 	alertHealth     models.AlertHealthStatus
+	retentionPolicy models.SnapshotRetentionPolicy
 }
 
 func NewRepository() *Repository {
@@ -50,6 +51,16 @@ func NewRepository() *Repository {
 			TestAlertLapsed:        true,
 			ConfiguredWebhookCount: 1,
 			ActiveAlertRulesCount:  3,
+		},
+		retentionPolicy: models.SnapshotRetentionPolicy{
+			RetentionDays:          90,
+			Strategy:               "archive",
+			ColdStoragePath:        `D:\archives\snapshots`,
+			KeepWeeklyIntervalDays: 7,
+			IsEnabled:              true,
+			LastRunStatus:          "IDLE",
+			UpdatedAt:              time.Now().UTC(),
+			UpdatedBy:              "system_init",
 		},
 	}
 
@@ -541,6 +552,79 @@ func (r *Repository) seedInitialData() {
 		IPAddress:     "127.0.0.1",
 		Details:       map[string]interface{}{"algorithm": "AES-256-GCM", "kdf": "HKDF-SHA256"},
 	})
+
+	// 7. Seed Snapshots (Recent + Historical >90 days for retention verification)
+	snap1 := models.HostSnapshotEntry{
+		ID:          "snap-recent-01",
+		TenantID:    "tenant-default-01",
+		HostID:      h2ID,
+		Hostname:    "W11-EXEC-LP04",
+		PayloadHash: "a1b2c3d4e5f67890",
+		Payload: models.HostSnapshotPayload{
+			AuditMetadata: models.SnapshotAuditMetadata{
+				TargetHost:    "W11-EXEC-LP04",
+				EngineVersion: "v3.0.0",
+				ScanProtocol:  "winrm_https",
+			},
+		},
+		PayloadSizeBytes: 84200,
+		CreatedAt:        now.Add(-5 * 24 * time.Hour),
+	}
+	r.snapshots[snap1.ID] = &snap1
+
+	snap2 := models.HostSnapshotEntry{
+		ID:          "snap-historical-100d",
+		TenantID:    "tenant-default-01",
+		HostID:      h2ID,
+		Hostname:    "W11-EXEC-LP04",
+		PayloadHash: "b2c3d4e5f6a17890",
+		Payload: models.HostSnapshotPayload{
+			AuditMetadata: models.SnapshotAuditMetadata{
+				TargetHost:    "W11-EXEC-LP04",
+				EngineVersion: "v3.0.0",
+				ScanProtocol:  "winrm_https",
+			},
+		},
+		PayloadSizeBytes: 83500,
+		CreatedAt:        now.Add(-100 * 24 * time.Hour),
+	}
+	r.snapshots[snap2.ID] = &snap2
+
+	snap3 := models.HostSnapshotEntry{
+		ID:          "snap-historical-105d",
+		TenantID:    "tenant-default-01",
+		HostID:      h2ID,
+		Hostname:    "W11-EXEC-LP04",
+		PayloadHash: "c3d4e5f6a1b27890",
+		Payload: models.HostSnapshotPayload{
+			AuditMetadata: models.SnapshotAuditMetadata{
+				TargetHost:    "W11-EXEC-LP04",
+				EngineVersion: "v3.0.0",
+				ScanProtocol:  "winrm_https",
+			},
+		},
+		PayloadSizeBytes: 83900,
+		CreatedAt:        now.Add(-105 * 24 * time.Hour),
+	}
+	r.snapshots[snap3.ID] = &snap3
+
+	snap4 := models.HostSnapshotEntry{
+		ID:          "snap-historical-120d",
+		TenantID:    "tenant-default-01",
+		HostID:      h3ID,
+		Hostname:    "W11-FIN-LT03",
+		PayloadHash: "d4e5f6a1b2c37890",
+		Payload: models.HostSnapshotPayload{
+			AuditMetadata: models.SnapshotAuditMetadata{
+				TargetHost:    "W11-FIN-LT03",
+				EngineVersion: "v3.0.0",
+				ScanProtocol:  "winrm_https",
+			},
+		},
+		PayloadSizeBytes: 79400,
+		CreatedAt:        now.Add(-120 * 24 * time.Hour),
+	}
+	r.snapshots[snap4.ID] = &snap4
 }
 
 // Public repository methods
@@ -1256,4 +1340,115 @@ func (r *Repository) RecordTestAlertResult(resp *drift.TestAlertResponse, operat
 			"is_synthetic_test":    true,
 		},
 	})
+}
+
+// GetSnapshotRetentionPolicy returns the currently active retention policy.
+func (r *Repository) GetSnapshotRetentionPolicy() models.SnapshotRetentionPolicy {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.retentionPolicy
+}
+
+// UpdateSnapshotRetentionPolicy updates and audits the snapshot retention policy.
+func (r *Repository) UpdateSnapshotRetentionPolicy(policy models.SnapshotRetentionPolicy, operator, ipAddr string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	policy.UpdatedAt = time.Now().UTC()
+	policy.UpdatedBy = operator
+	r.retentionPolicy = policy
+
+	r.auditLogs = append(r.auditLogs, models.SecurityAuditLog{
+		ID:            fmt.Sprintf("audit-retpolicy-%d", time.Now().UnixNano()),
+		CorrelationID: fmt.Sprintf("corr-retpolicy-%d", time.Now().UnixNano()),
+		Timestamp:     time.Now().UTC(),
+		Actor:         operator,
+		Action:        "SNAPSHOT_RETENTION_POLICY_UPDATED",
+		ResourceType:  "snapshot_retention_policy",
+		ResourceID:    "global_retention_policy",
+		IPAddress:     ipAddr,
+		Status:        "SUCCESS",
+		Details: map[string]interface{}{
+			"retention_days":    policy.RetentionDays,
+			"strategy":          policy.Strategy,
+			"cold_storage_path": policy.ColdStoragePath,
+			"is_enabled":        policy.IsEnabled,
+		},
+	})
+}
+
+// UpdateRetentionPolicyRunStats updates last run metrics.
+func (r *Repository) UpdateRetentionPolicyRunStats(policy models.SnapshotRetentionPolicy) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.retentionPolicy.LastRunAt = policy.LastRunAt
+	r.retentionPolicy.LastRunStatus = policy.LastRunStatus
+	r.retentionPolicy.LastReclaimedBytes = policy.LastReclaimedBytes
+}
+
+// ListAllSnapshotsForTenant returns all snapshots for a given tenant.
+func (r *Repository) ListAllSnapshotsForTenant(tenantID string) []models.HostSnapshotEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var list []models.HostSnapshotEntry
+	for _, snap := range r.snapshots {
+		if tenantID != "" && snap.TenantID != tenantID {
+			continue
+		}
+		list = append(list, *snap)
+	}
+	return list
+}
+
+// ArchiveSnapshotPayload marks the snapshot as archived and clears the heavy payload in-memory/in-DB.
+func (r *Repository) ArchiveSnapshotPayload(
+	snapshotID string,
+	archiveLocation string,
+	archiveChecksum string,
+	strategy string,
+	archivedAt time.Time,
+	rawSize int64,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	snap, exists := r.snapshots[snapshotID]
+	if !exists {
+		return fmt.Errorf("snapshot '%s' not found", snapshotID)
+	}
+
+	snap.IsArchived = true
+	snap.ArchivedAt = &archivedAt
+	snap.ArchiveLocation = archiveLocation
+	snap.ArchiveChecksum = archiveChecksum
+	snap.ArchiveStrategy = strategy
+	snap.PayloadSizeBytes = rawSize
+	// Clear heavy payload while preserving metadata structure
+	snap.Payload = models.HostSnapshotPayload{}
+
+	return nil
+}
+
+// MarkSnapshotWeeklyRetained flags a snapshot as a retained weekly checkpoint.
+func (r *Repository) MarkSnapshotWeeklyRetained(snapshotID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	snap, exists := r.snapshots[snapshotID]
+	if !exists {
+		return fmt.Errorf("snapshot '%s' not found", snapshotID)
+	}
+	snap.IsDownsampleRetained = true
+	return nil
+}
+
+// PruneDownsampledSnapshot removes a daily snapshot that was downsampled.
+func (r *Repository) PruneDownsampledSnapshot(snapshotID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.snapshots, snapshotID)
+	return nil
 }

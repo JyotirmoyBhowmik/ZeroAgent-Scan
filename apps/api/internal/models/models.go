@@ -165,26 +165,101 @@ type FleetMetrics struct {
 }
 
 type HostSnapshotEntry struct {
-	ID          string              `json:"id"`
-	TenantID    string              `json:"tenant_id"`
-	HostID      string              `json:"host_id"`
-	Hostname    string              `json:"hostname"`
-	ScanJobID   string              `json:"scan_job_id,omitempty"`
-	PayloadHash string              `json:"payload_hash"`
-	Payload     HostSnapshotPayload `json:"payload"`
-	CreatedAt   time.Time           `json:"created_at"`
+	ID                   string              `json:"id"`
+	TenantID             string              `json:"tenant_id"`
+	HostID               string              `json:"host_id"`
+	Hostname             string              `json:"hostname"`
+	ScanJobID            string              `json:"scan_job_id,omitempty"`
+	PayloadHash          string              `json:"payload_hash"`
+	Payload              HostSnapshotPayload `json:"payload"`
+	IsArchived           bool                `json:"is_archived"`
+	ArchivedAt           *time.Time          `json:"archived_at,omitempty"`
+	ArchiveLocation      string              `json:"archive_location,omitempty"`
+	ArchiveChecksum      string              `json:"archive_checksum,omitempty"`
+	ArchiveStrategy      string              `json:"archive_strategy,omitempty"` // cold_storage, downsampled
+	IsDownsampleRetained bool                `json:"is_downsample_retained"`
+	PayloadSizeBytes     int64               `json:"payload_size_bytes"`
+	CreatedAt            time.Time           `json:"created_at"`
+}
+
+type SnapshotRetentionPolicy struct {
+	RetentionDays          int       `json:"retention_days"`            // default 90
+	Strategy               string    `json:"strategy"`                  // "archive" (default), "downsample"
+	ColdStoragePath        string    `json:"cold_storage_path"`         // e.g. "D:\archives\snapshots"
+	KeepWeeklyIntervalDays int       `json:"keep_weekly_interval_days"` // default 7
+	IsEnabled              bool      `json:"is_enabled"`
+	LastRunAt              *time.Time `json:"last_run_at,omitempty"`
+	LastRunStatus          string    `json:"last_run_status,omitempty"`
+	LastReclaimedBytes     int64     `json:"last_reclaimed_bytes,omitempty"`
+	UpdatedAt              time.Time `json:"updated_at"`
+	UpdatedBy              string    `json:"updated_by"`
+}
+
+type SnapshotArchiveSummary struct {
+	SnapshotID       string    `json:"snapshot_id"`
+	HostID           string    `json:"host_id"`
+	Hostname         string    `json:"hostname"`
+	CapturedAt       time.Time `json:"captured_at"`
+	PayloadSizeBytes int64     `json:"payload_size_bytes"`
+	Action           string    `json:"action"` // ARCHIVE_TO_COLD_STORAGE, RETAIN_WEEKLY_CHECKPOINT, PRUNE_DOWNSAMPLED
+	TargetLocation   string    `json:"target_location,omitempty"`
+}
+
+type SnapshotRetentionDryRun struct {
+	RetentionDays                  int                      `json:"retention_days"`
+	Strategy                       string                   `json:"strategy"`
+	CutoffDate                     time.Time                `json:"cutoff_date"`
+	TotalSnapshotsEvaluated        int                      `json:"total_snapshots_evaluated"`
+	SnapshotsEligibleForAction     int                      `json:"snapshots_eligible_for_action"`
+	SnapshotsToArchive             int                      `json:"snapshots_to_archive"`
+	SnapshotsToPrune               int                      `json:"snapshots_to_prune"`
+	SnapshotsWeeklyRetained        int                      `json:"snapshots_weekly_retained"`
+	EstimatedReclaimedBytes        int64                    `json:"estimated_reclaimed_bytes"`
+	EstimatedStorageSavedMB        float64                  `json:"estimated_storage_saved_mb"`
+	AffectedEndpointsCount         int                      `json:"affected_endpoints_count"`
+	AffectedEndpoints              []string                 `json:"affected_endpoints"`
+	SampleSnapshots                []SnapshotArchiveSummary `json:"sample_snapshots"`
+	PreservedDerivedRecordsNotice string                   `json:"preserved_derived_records_notice"`
+	DryRunGeneratedAt              time.Time                `json:"dry_run_generated_at"`
+}
+
+type SnapshotRetentionExecuteRequest struct {
+	RetentionDays   int    `json:"retention_days,omitempty"`
+	Strategy        string `json:"strategy,omitempty"` // archive, downsample
+	ColdStoragePath string `json:"cold_storage_path,omitempty"`
+	DryRun          bool   `json:"dry_run,omitempty"`
+	Justification   string `json:"justification,omitempty"`
+}
+
+type SnapshotRetentionExecuteResult struct {
+	ExecutionID             string    `json:"execution_id"`
+	Strategy                string    `json:"strategy"`
+	RetentionDays           int       `json:"retention_days"`
+	CutoffDate              time.Time `json:"cutoff_date"`
+	SnapshotsProcessed      int       `json:"snapshots_processed"`
+	SnapshotsArchived       int       `json:"snapshots_archived"`
+	SnapshotsDownsampled    int       `json:"snapshots_downsampled"`
+	SnapshotsWeeklyRetained int       `json:"snapshots_weekly_retained"`
+	ReclaimedBytes          int64     `json:"reclaimed_bytes"`
+	StorageSavedMB          float64   `json:"storage_saved_mb"`
+	ArchiveDirectory        string    `json:"archive_directory,omitempty"`
+	DurationMs              int64     `json:"duration_ms"`
+	Status                  string    `json:"status"` // COMPLETED, FAILED
+	ExecutedAt              time.Time `json:"executed_at"`
+	ExecutedBy              string    `json:"executed_by"`
+	AuditLogID              string    `json:"audit_log_id"`
 }
 
 type PilotHealthSummary struct {
-	TotalPilotHosts           int        `json:"total_pilot_hosts"`
-	OnlinePilotHosts          int        `json:"online_pilot_hosts"`
-	ScanSuccessRate           float64    `json:"scan_success_rate"`
-	AuthFailureCount          int        `json:"auth_failure_count"`
-	LockoutRiskCount          int        `json:"lockout_risk_count"`
-	EDRAlertCorrelationCount  int        `json:"edr_alert_correlation_count"`
-	AverageScanDurationMs     int64      `json:"average_scan_duration_ms"`
-	AverageComplianceScore    float64    `json:"average_compliance_score"`
-	PilotHosts                []Endpoint `json:"pilot_hosts"`
+	TotalPilotHosts          int        `json:"total_pilot_hosts"`
+	OnlinePilotHosts         int        `json:"online_pilot_hosts"`
+	ScanSuccessRate          float64    `json:"scan_success_rate"`
+	AuthFailureCount         int        `json:"auth_failure_count"`
+	LockoutRiskCount         int        `json:"lockout_risk_count"`
+	EDRAlertCorrelationCount int        `json:"edr_alert_correlation_count"`
+	AverageScanDurationMs    int64      `json:"average_scan_duration_ms"`
+	AverageComplianceScore   float64    `json:"average_compliance_score"`
+	PilotHosts               []Endpoint `json:"pilot_hosts"`
 }
 
 type PromoteTierRequest struct {

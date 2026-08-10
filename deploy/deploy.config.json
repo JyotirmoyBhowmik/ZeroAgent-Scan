@@ -52,5 +52,14 @@
     "notify_webhook_url": "https://hooks.slack.com/services/BACKUP_AUDIT_NOTIFICATIONS",
     "notify_email": "secops-backups@endpointguard.local",
     "history_log_path": "D:\\backups\\zeroagent\\restore_drill_history.json"
+  },
+  "snapshot_retention": {
+    "retention_days": 90,
+    "strategy": "archive",
+    "cold_storage_path": "D:\\archives\\snapshots",
+    "keep_weekly_interval_days": 7,
+    "schedule_time": "03:30",
+    "is_enabled": true,
+    "history_log_path": "D:\\backups\\zeroagent\\snapshot_retention_history.json"
   }
 }

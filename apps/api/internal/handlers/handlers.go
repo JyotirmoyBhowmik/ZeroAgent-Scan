@@ -16,6 +16,7 @@ import (
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/models"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/reports"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/repository"
+	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/retention"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vault"
 	"github.com/JyotirmoyBhowmik/ZeroAgent-Scan/apps/api/internal/vulnscan"
 	"github.com/go-chi/chi/v5"
@@ -32,6 +33,7 @@ type APIHandler struct {
 	driftWorker       *drift.DriftWorker
 	reportGen         *reports.ReportGenerator
 	webhookDispatcher *drift.WebhookDispatcher
+	retentionEngine   *retention.Engine
 }
 
 func NewAPIHandler(
@@ -51,6 +53,7 @@ func NewAPIHandler(
 		driftRepo = drift.NewMemoryDriftRepository()
 	}
 	dispatcher := drift.NewWebhookDispatcher(nil, 2)
+	retEngine := retention.NewEngine(repo)
 	return &APIHandler{
 		repo:              repo,
 		vaultManager:      vm,
@@ -61,7 +64,82 @@ func NewAPIHandler(
 		driftWorker:       drift.NewDriftWorker(driftRepo, dispatcher),
 		reportGen:         reports.NewReportGenerator(repo, findingRepo, compRepo, driftRepo),
 		webhookDispatcher: dispatcher,
+		retentionEngine:   retEngine,
 	}
+}
+
+func (h *APIHandler) GetSnapshotRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	policy := h.repo.GetSnapshotRetentionPolicy()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(policy)
+}
+
+func (h *APIHandler) UpdateSnapshotRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	var policy models.SnapshotRetentionPolicy
+	if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "MALFORMED_JSON", "Invalid JSON payload", nil)
+		return
+	}
+
+	actor := auth.GetUserID(r.Context())
+	if actor == "" {
+		actor = "admin_operator"
+	}
+
+	h.repo.UpdateSnapshotRetentionPolicy(policy, actor, r.RemoteAddr)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":     "UPDATED",
+		"policy":     policy,
+		"updated_at": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *APIHandler) DryRunSnapshotRetention(w http.ResponseWriter, r *http.Request) {
+	var req models.SnapshotRetentionExecuteRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	tenantID := auth.GetTenantID(r.Context())
+	if h.retentionEngine == nil {
+		h.retentionEngine = retention.NewEngine(h.repo)
+	}
+
+	dryRunResult, err := h.retentionEngine.DryRun(r.Context(), req, tenantID)
+	if err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusBadRequest, "DRY_RUN_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(dryRunResult)
+}
+
+func (h *APIHandler) ExecuteSnapshotRetention(w http.ResponseWriter, r *http.Request) {
+	var req models.SnapshotRetentionExecuteRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	actor := auth.GetUserID(r.Context())
+	if actor == "" {
+		actor = "admin_operator"
+	}
+	tenantID := auth.GetTenantID(r.Context())
+
+	if h.retentionEngine == nil {
+		h.retentionEngine = retention.NewEngine(h.repo)
+	}
+
+	result, err := h.retentionEngine.Execute(r.Context(), req, tenantID, actor, r.RemoteAddr)
+	if err != nil {
+		middleware.WriteProblemDetails(w, r, http.StatusInternalServerError, "RETENTION_EXECUTION_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func (h *APIHandler) SendTestAlert(w http.ResponseWriter, r *http.Request) {

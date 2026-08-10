@@ -156,9 +156,13 @@ func main() {
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/admin/settings/rollout-tiers", apiHandler.GetRolloutSettings)
 			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Put("/admin/settings/rollout-tiers", apiHandler.UpdateRolloutSettings)
 
-			// Keyset Paginated Snapshots
+			// Keyset Paginated Snapshots & Retention Management
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/snapshots", apiHandler.ListSnapshots)
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/snapshots/{id}", apiHandler.GetSnapshotByID)
+			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/admin/snapshots/retention/policy", apiHandler.GetSnapshotRetentionPolicy)
+			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Put("/admin/snapshots/retention/policy", apiHandler.UpdateSnapshotRetentionPolicy)
+			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Post("/admin/snapshots/retention/dry-run", apiHandler.DryRunSnapshotRetention)
+			protected.With(auth.RequirePermission(auth.PermissionManageTenants), auth.RequireStepUp()).Post("/admin/snapshots/retention/execute", apiHandler.ExecuteSnapshotRetention)
 
 			// Agentless Scans
 			protected.With(auth.RequirePermission(auth.PermissionTriggerScans)).Post("/scans", apiHandler.CreateScanJob)

@@ -423,3 +423,72 @@ export interface FleetMetrics {
     band_under_50: number;
   };
 }
+
+export interface SnapshotRetentionPolicy {
+  retention_days: number;
+  strategy: 'archive' | 'downsample';
+  cold_storage_path: string;
+  keep_weekly_interval_days: number;
+  is_enabled: boolean;
+  last_run_at?: string;
+  last_run_status?: string;
+  last_reclaimed_bytes?: number;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface SnapshotArchiveSummary {
+  snapshot_id: string;
+  host_id: string;
+  hostname: string;
+  captured_at: string;
+  payload_size_bytes: number;
+  action: 'ARCHIVE_TO_COLD_STORAGE' | 'RETAIN_WEEKLY_CHECKPOINT' | 'PRUNE_DOWNSAMPLED';
+  target_location?: string;
+}
+
+export interface SnapshotRetentionDryRun {
+  retention_days: number;
+  strategy: string;
+  cutoff_date: string;
+  total_snapshots_evaluated: number;
+  snapshots_eligible_for_action: number;
+  snapshots_to_archive: number;
+  snapshots_to_prune: number;
+  snapshots_weekly_retained: number;
+  estimated_reclaimed_bytes: number;
+  estimated_storage_saved_mb: number;
+  affected_endpoints_count: number;
+  affected_endpoints: string[];
+  sample_snapshots: SnapshotArchiveSummary[];
+  preserved_derived_records_notice: string;
+  dry_run_generated_at: string;
+}
+
+export interface SnapshotRetentionExecuteRequest {
+  retention_days?: number;
+  strategy?: string;
+  cold_storage_path?: string;
+  dry_run?: boolean;
+  justification?: string;
+}
+
+export interface SnapshotRetentionExecuteResult {
+  execution_id: string;
+  strategy: string;
+  retention_days: number;
+  cutoff_date: string;
+  snapshots_processed: number;
+  snapshots_archived: number;
+  snapshots_downsampled: number;
+  snapshots_weekly_retained: number;
+  reclaimed_bytes: number;
+  storage_saved_mb: number;
+  archive_directory?: string;
+  duration_ms: number;
+  status: string;
+  executed_at: string;
+  executed_by: string;
+  audit_log_id: string;
+}
+

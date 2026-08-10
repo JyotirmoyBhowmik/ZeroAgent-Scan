@@ -134,19 +134,26 @@ Submit the outbound WinRM/DCOM rule as a formal change request to your network/f
 - Use Windows Task Scheduler (not an in-process cron-like library alone) to trigger the nightly/staggered fleet scan via a call to the app's own scan-trigger API, so scan scheduling survives independently of the app process staying up continuously.
 - Stagger by subnet as recommended in the earlier scale-hardening prompt — don't fire all 400 at 2:00 AM sharp.
 
-### 9. Backup, Automated Restore Drills & Monitoring
+### 9. Backup, Automated Restore Drills & Snapshot Cold-Storage Archival
 - **Automated Nightly Backups**: Run `pg_dump` via `backup-db.ps1` at 02:00 AM, retained per compliance policy (30 daily + 12 weekly).
 - **Quarterly Automated Restore Drills**: Execute `restore-drill.ps1` via Task Scheduler (`endpointguard-restore-drill-task.xml`) quarterly (1st of Jan/Apr/Jul/Oct at 03:00 AM).
   - Restores backup into throwaway scratch DB (`zeroagent_restore_scratch`), validates SHA-256 checksums, executes table integrity queries (`SELECT COUNT(*) FROM endpoints`, `host_snapshots`), logs results to `D:\backups\zeroagent\restore_drill_history.json`, and dispatches webhook/email audit notifications.
   - Test on-demand at any time with `.\backup-db.ps1 -RunDrill` or `.\restore-drill.ps1`.
+- **Nightly Snapshot Cold-Storage Archival**: Execute `archive-snapshots.ps1` via Task Scheduler (`endpointguard-snapshot-retention-task.xml`) nightly at 03:30 AM.
+  - Evaluates raw JSONB `host_snapshots` older than the retention window (default: 90 days).
+  - **Archival Mode (Default)**: GZIP-compresses raw telemetry to `D:\archives\snapshots\YYYY-MM\`, validates SHA-256 hashes, and clears heavy payloads from PostgreSQL while preserving snapshot rows.
+  - **Compliance Guarantee Invariant**: All derived `drift_events` and `compliance_evaluations` are preserved in Postgres indefinitely for historical audit reports.
+  - **Dry-Run Preview**: Preview impact on-demand with `.\archive-snapshots.ps1 -DryRun` or via the Admin UI.
 - **Process & Health Monitoring**: Point Windows Server Performance Monitor or enterprise monitoring (SCOM, Datadog, Zabbix) at the NSSM services, Postgres engine, and the application `/health` and `/admin/health/status` endpoints.
 
 ### 10. Go-Live Checklist
 - [ ] All 10 production-hardening prompts applied and tested
 - [ ] Service account is least-privilege, not domain admin
 - [ ] TLS 1.2+ enforced, valid internal CA cert installed
+- [ ] Dedicated non-OS volumes configured (`D:\postgres\data`, `D:\backups\zeroagent`, `D:\archives\snapshots`)
 - [ ] Firewall change request approved and verified with test scans against Pilot ring
 - [ ] Backup job tested with an automated scratch restore drill (`.\restore-drill.ps1`), producing a passing audit record
+- [ ] Snapshot retention dry-run verified (`.\archive-snapshots.ps1 -DryRun`), confirming drift and compliance history preservation
 - [ ] Human alerting verified via "Send Test Alert" in `/admin` with live webhook/email delivery confirmation
-- [ ] Quarterly restore drill Task Scheduler job registered (`ZeroAgent-DatabaseRestoreDrill`)
+- [ ] Scheduled Task Scheduler jobs registered (`ZeroAgent-DatabaseBackup`, `ZeroAgent-DatabaseRestoreDrill`, `ZeroAgent-SnapshotRetention`)
 - [ ] Runbook handed to whoever is on call, including service restart commands and log locations
