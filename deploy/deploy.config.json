@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "application": {
+    "name": "ZeroAgent-Scan",
+    "service_display_name": "ZeroAgent-Scan EMS Enterprise Control Plane",
+    "version": "1.0.0",
+    "install_path": "C:\\apps\\zeroagent",
+    "log_path": "C:\\apps\\zeroagent\\logs",
+    "backup_path": "D:\\backups\\zeroagent",
+    "temp_path": "C:\\apps\\zeroagent\\temp"
+  },
+  "service_account": {
+    "type": "LocalService",
+    "username": "svc_zeroagent",
+    "grant_logon_as_service": true
+  },
+  "database": {
+    "host": "127.0.0.1",
+    "port": 5432,
+    "name": "zeroagent_prod",
+    "username": "zeroagent_app",
+    "data_path": "D:\\postgres\\data",
+    "pg_dump_path": "C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe"
+  },
+  "network": {
+    "api_port": 8080,
+    "dashboard_port": 3000,
+    "https_port": 443,
+    "serve_mode": "IIS",
+    "allowed_scan_subnets": [
+      "10.100.1.0/24",
+      "10.100.2.0/24",
+      "10.100.3.0/24",
+      "10.100.4.0/24"
+    ]
+  },
+  "security": {
+    "enforce_tls12_min": true,
+    "disable_legacy_protocols": true,
+    "schannel_disable_sslv3": true,
+    "schannel_disable_tls10": true,
+    "schannel_disable_tls11": true
+  },
+  "backup": {
+    "daily_retention_days": 30,
+    "weekly_retention_weeks": 12,
+    "schedule_time": "02:00"
+  }
+}
