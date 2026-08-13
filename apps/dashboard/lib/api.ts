@@ -40,7 +40,25 @@ import {
   MOCK_GATEWAYS,
 } from "./mockData";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
+function getApiBase(): string {
+  if (typeof window !== "undefined") {
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://localhost:8080/api/v1";
+    }
+    const configured = process.env.NEXT_PUBLIC_API_URL;
+    if (configured && !configured.includes("zeroagent.corp.local")) {
+      const clean = configured.replace(/\/+$/, "");
+      return clean.endsWith("/api/v1") ? clean : (clean.endsWith("/api") ? `${clean}/v1` : `${clean}/api/v1`);
+    }
+    return `${window.location.protocol}//${window.location.host}/api/v1`;
+  }
+  const configured = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+  if (configured && !configured.includes("zeroagent.corp.local")) {
+    const clean = configured.replace(/\/+$/, "");
+    return clean.endsWith("/api/v1") ? clean : (clean.endsWith("/api") ? `${clean}/v1` : `${clean}/api/v1`);
+  }
+  return "http://localhost:8080/api/v1";
+}
 
 const MOCK_AUDIT_LOGS: SecurityAuditLog[] = [
   {
@@ -103,7 +121,7 @@ const MOCK_CREDENTIALS: VaultCredentialSummary[] = [
 
 async function fetchJSON<T>(endpoint: string, fallback: T, options?: RequestInit): Promise<T> {
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
+    const res = await fetch(`${getApiBase()}${endpoint}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -174,7 +192,7 @@ export async function updateVulnerabilityStatus(
   justificationNote: string
 ): Promise<{ success: boolean; updatedCount: number }> {
   try {
-    const res = await fetch(`${API_BASE}/findings/bulk-status`, {
+    const res = await fetch(`${getApiBase()}/findings/bulk-status`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -199,7 +217,7 @@ export async function getDriftEvents(): Promise<DriftEvent[]> {
 
 export async function acknowledgeDriftEvent(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/drift/events/${id}/acknowledge`, {
+    const res = await fetch(`${getApiBase()}/drift/events/${id}/acknowledge`, {
       method: "POST",
       headers: { "X-Tenant-ID": "tenant-default-01" },
     });
@@ -226,7 +244,7 @@ export async function generateShareableReportLink(
   ttlHours: number
 ): Promise<{ shareable_url: string; expires_at: string }> {
   try {
-    const res = await fetch(`${API_BASE}/reports/${reportId}/share-link`, {
+    const res = await fetch(`${getApiBase()}/reports/${reportId}/share-link`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
       body: JSON.stringify({ ttl_hours: ttlHours }),
@@ -258,7 +276,7 @@ export async function scheduleRecurringReport(
   };
 
   try {
-    const res = await fetch(`${API_BASE}/reports/schedule`, {
+    const res = await fetch(`${getApiBase()}/reports/schedule`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
       body: JSON.stringify(newConfig),
@@ -356,7 +374,7 @@ export const api = {
     target_ip: string
   ): Promise<{ status: string; latency_ms: number; auth_mechanism: string; message: string }> => {
     try {
-      const res = await fetch(`${API_BASE}/vault/credentials/${id}/test`, {
+      const res = await fetch(`${getApiBase()}/vault/credentials/${id}/test`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify({ target_ip }),
@@ -374,7 +392,7 @@ export const api = {
   },
   fetchPilotHealthSummary: async (): Promise<PilotHealthSummary> => {
     try {
-      const res = await fetch(`${API_BASE}/endpoints/pilot/summary`, {
+      const res = await fetch(`${getApiBase()}/endpoints/pilot/summary`, {
         headers: { "X-Tenant-ID": "tenant-default-01" },
       });
       if (res.ok) {
@@ -398,7 +416,7 @@ export const api = {
     req: PromoteTierRequest
   ): Promise<{ status: string; target_tier: string; promoted_count: number; justification: string }> => {
     try {
-      const res = await fetch(`${API_BASE}/endpoints/rollout-tier/promote`, {
+      const res = await fetch(`${getApiBase()}/endpoints/rollout-tier/promote`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify(req),
@@ -418,7 +436,7 @@ export const api = {
     req: BulkAssignTierRequest
   ): Promise<{ status: string; assigned_tier: string; affected_count: number; justification: string }> => {
     try {
-      const res = await fetch(`${API_BASE}/endpoints/rollout-tier/bulk-assign`, {
+      const res = await fetch(`${getApiBase()}/endpoints/rollout-tier/bulk-assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify(req),
@@ -440,7 +458,7 @@ export const api = {
     justification: string
   ): Promise<{ status: string; endpoint_id: string; tier: string; justification: string }> => {
     try {
-      const res = await fetch(`${API_BASE}/endpoints/${id}/rollout-tier`, {
+      const res = await fetch(`${getApiBase()}/endpoints/${id}/rollout-tier`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify({ tier, justification }),
@@ -458,7 +476,7 @@ export const api = {
   },
   fetchRolloutSettings: async (): Promise<RolloutSettings> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/settings/rollout-tiers`, {
+      const res = await fetch(`${getApiBase()}/admin/settings/rollout-tiers`, {
         headers: { "X-Tenant-ID": "tenant-default-01" },
       });
       if (res.ok) {
@@ -472,7 +490,7 @@ export const api = {
   },
   updateRolloutSettings: async (settings: RolloutSettings): Promise<any> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/settings/rollout-tiers`, {
+      const res = await fetch(`${getApiBase()}/admin/settings/rollout-tiers`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify(settings),
@@ -485,7 +503,7 @@ export const api = {
   },
   fetchAlertHealthStatus: async (): Promise<AlertHealthStatus> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/health/status`, {
+      const res = await fetch(`${getApiBase()}/admin/health/status`, {
         headers: { "X-Tenant-ID": "tenant-default-01" },
       });
       if (res.ok) {
@@ -502,7 +520,7 @@ export const api = {
   },
   sendTestAlert: async (req: TestAlertRequest): Promise<TestAlertResponse> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/health/test-alert`, {
+      const res = await fetch(`${getApiBase()}/admin/health/test-alert`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify(req),
@@ -525,7 +543,7 @@ export const api = {
   },
   fetchSnapshotRetentionPolicy: async (): Promise<SnapshotRetentionPolicy> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/snapshots/retention/policy`, {
+      const res = await fetch(`${getApiBase()}/admin/snapshots/retention/policy`, {
         headers: { "X-Tenant-ID": "tenant-default-01" },
       });
       if (res.ok) {
@@ -547,7 +565,7 @@ export const api = {
     policy: Partial<SnapshotRetentionPolicy>
   ): Promise<{ status: string; policy: SnapshotRetentionPolicy }> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/snapshots/retention/policy`, {
+      const res = await fetch(`${getApiBase()}/admin/snapshots/retention/policy`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify(policy),
@@ -573,7 +591,7 @@ export const api = {
     req: SnapshotRetentionExecuteRequest
   ): Promise<SnapshotRetentionDryRun> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/snapshots/retention/dry-run`, {
+      const res = await fetch(`${getApiBase()}/admin/snapshots/retention/dry-run`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify(req),
@@ -626,7 +644,7 @@ export const api = {
     req: SnapshotRetentionExecuteRequest
   ): Promise<SnapshotRetentionExecuteResult> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/snapshots/retention/execute`, {
+      const res = await fetch(`${getApiBase()}/admin/snapshots/retention/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Tenant-ID": "tenant-default-01" },
         body: JSON.stringify(req),
@@ -657,7 +675,7 @@ export const api = {
   },
   fetchProductionReadiness: async (): Promise<ProductionReadinessReport> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/readiness`, {
+      const res = await fetch(`${getApiBase()}/admin/readiness`, {
         headers: { "X-Tenant-ID": "tenant-default-01" },
       });
       if (res.ok) {
