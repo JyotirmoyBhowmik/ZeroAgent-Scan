@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+apps/dashboard/node_modules
+apps/dashboard/.next
+apps/dashboard/out
+packages/scan-engine/powershell/tests
+dist
+tmp
+.gemini
+*.log
