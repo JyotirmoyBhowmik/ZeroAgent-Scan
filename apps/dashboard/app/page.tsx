@@ -41,9 +41,9 @@ export default function FleetOverviewPage() {
         api.fetchAlertHealthStatus(),
       ]);
       setMetrics(m);
-      setDriftEvents(d);
-      setEndpoints(e);
-      setSubnets(s);
+      setDriftEvents(Array.isArray(d) ? d : []);
+      setEndpoints(Array.isArray(e) ? e : []);
+      setSubnets(Array.isArray(s) ? s : []);
       setAlertHealth(h);
     } catch (err: any) {
       setError(err?.message || "Failed to load fleet telemetry.");
@@ -130,7 +130,7 @@ export default function FleetOverviewPage() {
       </div>
 
       {/* Insecure Transport Warning Banner */}
-      {subnets.filter((s) => s.allow_insecure_http).length > 0 && (
+      {Array.isArray(subnets) && subnets.filter((s) => s.allow_insecure_http).length > 0 && (
         <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-3.5 text-amber-200 text-xs">
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div>

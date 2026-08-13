@@ -222,8 +222,9 @@ func main() {
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/scans/{id}", apiHandler.GetScanJobByID)
 			protected.With(auth.RequirePermission(auth.PermissionCancelScans)).Post("/scans/{id}/cancel", apiHandler.CancelScanJob)
 
-			// Subnet Collector Gateways
+			// Subnet Collector Gateways & Network Topology
 			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/gateways", apiHandler.ListGateways)
+			protected.With(auth.RequirePermission(auth.PermissionReadTelemetry)).Get("/network/subnets", apiHandler.ListNetworkSubnets)
 			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Post("/gateways/register", apiHandler.RegisterGateway)
 			protected.With(auth.RequirePermission(auth.PermissionManageTenants)).Post("/gateways/{id}/approve", apiHandler.ApproveGateway)
 			protected.Post("/gateways/heartbeat", apiHandler.GatewayHeartbeat)

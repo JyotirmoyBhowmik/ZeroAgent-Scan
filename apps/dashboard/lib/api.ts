@@ -145,9 +145,12 @@ export async function getFleetMetrics(): Promise<FleetMetrics> {
 
 export async function getEndpoints(search?: string, os?: string, status?: string): Promise<Endpoint[]> {
   let list = await fetchJSON<Endpoint[]>("/endpoints", MOCK_ENDPOINTS);
+  if (!Array.isArray(list)) {
+    list = MOCK_ENDPOINTS;
+  }
   if (search) {
     const q = search.toLowerCase();
-    list = list.filter((e) => e.hostname.toLowerCase().includes(q) || e.ip_address.includes(q) || e.model.toLowerCase().includes(q));
+    list = list.filter((e) => e.hostname.toLowerCase().includes(q) || e.ip_address.includes(q) || e.model?.toLowerCase().includes(q));
   }
   if (os && os !== "all") {
     list = list.filter((e) => e.os_name.toLowerCase().includes(os.toLowerCase()));
@@ -174,16 +177,18 @@ export async function getEndpointDetail(id: string): Promise<EndpointDetail | nu
 
 export async function getHostSnapshots(endpointId: string): Promise<HostSnapshot[]> {
   const filtered = MOCK_SNAPSHOTS.filter((s) => s.endpoint_id === endpointId || s.endpoint_id === "host-w11-exec-01");
-  return fetchJSON<HostSnapshot[]>(`/snapshots?endpoint_id=${endpointId}`, filtered.length > 0 ? filtered : MOCK_SNAPSHOTS);
+  const result = await fetchJSON<HostSnapshot[]>(`/snapshots?endpoint_id=${endpointId}`, filtered.length > 0 ? filtered : MOCK_SNAPSHOTS);
+  return Array.isArray(result) ? result : (filtered.length > 0 ? filtered : MOCK_SNAPSHOTS);
 }
 
 export async function getSnapshotDiff(idA: string, idB: string): Promise<SnapshotDiffItem[]> {
-  return fetchJSON<SnapshotDiffItem[]>(`/snapshots/diff?a=${idA}&b=${idB}`, MOCK_DIFF_EXAMPLE);
+  const result = await fetchJSON<SnapshotDiffItem[]>(`/snapshots/diff?a=${idA}&b=${idB}`, MOCK_DIFF_EXAMPLE);
+  return Array.isArray(result) ? result : MOCK_DIFF_EXAMPLE;
 }
 
 export async function getVulnerabilityFindings(): Promise<VulnerabilityFinding[]> {
   const resp = await fetchJSON<{ findings: VulnerabilityFinding[] }>("/findings", { findings: MOCK_VULNERABILITIES });
-  return resp.findings || MOCK_VULNERABILITIES;
+  return (resp && Array.isArray(resp.findings)) ? resp.findings : MOCK_VULNERABILITIES;
 }
 
 export async function updateVulnerabilityStatus(
@@ -212,7 +217,8 @@ export async function updateVulnerabilityStatus(
 }
 
 export async function getDriftEvents(): Promise<DriftEvent[]> {
-  return fetchJSON<DriftEvent[]>("/drift/events", MOCK_DRIFT_EVENTS);
+  const result = await fetchJSON<DriftEvent[]>("/drift/events", MOCK_DRIFT_EVENTS);
+  return Array.isArray(result) ? result : MOCK_DRIFT_EVENTS;
 }
 
 export async function acknowledgeDriftEvent(id: string): Promise<boolean> {
@@ -228,15 +234,18 @@ export async function acknowledgeDriftEvent(id: string): Promise<boolean> {
 }
 
 export async function getCISResults(): Promise<CISResult[]> {
-  return fetchJSON<CISResult[]>("/compliance/rules", MOCK_CIS_RESULTS);
+  const result = await fetchJSON<CISResult[]>("/compliance/rules", MOCK_CIS_RESULTS);
+  return Array.isArray(result) ? result : MOCK_CIS_RESULTS;
 }
 
 export async function getNetworkSubnets(): Promise<NetworkSubnet[]> {
-  return fetchJSON<NetworkSubnet[]>("/network/subnets", MOCK_SUBNETS);
+  const result = await fetchJSON<NetworkSubnet[]>("/network/subnets", MOCK_SUBNETS);
+  return Array.isArray(result) ? result : MOCK_SUBNETS;
 }
 
 export async function getReportConfigs(): Promise<ReportConfig[]> {
-  return fetchJSON<ReportConfig[]>("/reports/configs", MOCK_REPORTS);
+  const result = await fetchJSON<ReportConfig[]>("/reports/configs", MOCK_REPORTS);
+  return Array.isArray(result) ? result : MOCK_REPORTS;
 }
 
 export async function generateShareableReportLink(

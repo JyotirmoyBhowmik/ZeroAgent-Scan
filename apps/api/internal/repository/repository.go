@@ -1546,3 +1546,60 @@ func (r *Repository) PruneDownsampledSnapshot(snapshotID string) error {
 	delete(r.snapshots, snapshotID)
 	return nil
 }
+
+// ListNetworkSubnets returns discovered corporate subnets and their telemetry status.
+func (r *Repository) ListNetworkSubnets() []models.NetworkSubnet {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return []models.NetworkSubnet{
+		{
+			ID:                  "sub-001",
+			SubnetCIDR:          "10.100.1.0/24",
+			Name:                "Corporate HQ Workstations (Subnet A)",
+			Location:            "Building 4, New York, NY",
+			AssignedGatewayCode: "gw-subnet-10-100-1-0",
+			GatewayName:         "On-Prem Corporate HQ (Subnet A)",
+			GatewayStatus:       "healthy",
+			GatewayLatencyMs:    4,
+			HostCount:           18,
+			OnlineCount:         18,
+			CompliantCount:      16,
+			AllowInsecureHTTP:   false,
+			TransportProtocol:   "winrm_https",
+			LastScanAt:          time.Now().UTC().Add(-2 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			ID:                  "sub-002",
+			SubnetCIDR:          "10.100.2.0/24",
+			Name:                "Datacenter East Servers (Subnet B)",
+			Location:            "Datacenter East, Ashburn, VA",
+			AssignedGatewayCode: "gw-subnet-10-100-2-0",
+			GatewayName:         "Datacenter East Racks (Subnet B)",
+			GatewayStatus:       "healthy",
+			GatewayLatencyMs:    2,
+			HostCount:           10,
+			OnlineCount:         10,
+			CompliantCount:      10,
+			AllowInsecureHTTP:   false,
+			TransportProtocol:   "winrm_https",
+			LastScanAt:          time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			ID:                  "sub-003",
+			SubnetCIDR:          "10.100.3.0/24",
+			Name:                "Remote Branch Workstations (Subnet C)",
+			Location:            "Branch Office, Austin, TX",
+			AssignedGatewayCode: "gw-subnet-10-100-3-0",
+			GatewayName:         "Austin Branch Office Gateway",
+			GatewayStatus:       "degraded",
+			GatewayLatencyMs:    42,
+			HostCount:           2,
+			OnlineCount:         2,
+			CompliantCount:      0,
+			AllowInsecureHTTP:   true,
+			TransportProtocol:   "winrm_http",
+			LastScanAt:          time.Now().UTC().Add(-6 * time.Hour).Format(time.RFC3339),
+		},
+	}
+}

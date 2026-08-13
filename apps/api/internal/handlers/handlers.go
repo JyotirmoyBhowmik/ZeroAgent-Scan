@@ -575,6 +575,12 @@ func (h *APIHandler) ListGateways(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(gateways)
 }
 
+func (h *APIHandler) ListNetworkSubnets(w http.ResponseWriter, r *http.Request) {
+	subnets := h.repo.ListNetworkSubnets()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(subnets)
+}
+
 func (h *APIHandler) RegisterGateway(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		GatewayCode string `json:"gateway_code"`

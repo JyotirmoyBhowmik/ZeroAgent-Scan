@@ -95,6 +95,23 @@ type CollectorGateway struct {
 	CreatedAt           time.Time `json:"created_at"`
 }
 
+type NetworkSubnet struct {
+	ID                  string `json:"id"`
+	SubnetCIDR          string `json:"subnet_cidr"`
+	Name                string `json:"name"`
+	Location            string `json:"location"`
+	AssignedGatewayCode string `json:"assigned_gateway_code"`
+	GatewayName         string `json:"gateway_name"`
+	GatewayStatus       string `json:"gateway_status"`
+	GatewayLatencyMs    int    `json:"gateway_latency_ms"`
+	HostCount           int    `json:"host_count"`
+	OnlineCount         int    `json:"online_count"`
+	CompliantCount      int    `json:"compliant_count"`
+	AllowInsecureHTTP   bool   `json:"allow_insecure_http"`
+	TransportProtocol   string `json:"transport_protocol"`
+	LastScanAt          string `json:"last_scan_at"`
+}
+
 type VaultCredentialSummary struct {
 	ID             string    `json:"id"`
 	OpaqueID       string    `json:"opaque_id"`
