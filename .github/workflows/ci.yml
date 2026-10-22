@@ -35,7 +35,7 @@ jobs:
           cache: 'pip'
 
       - name: Set up pnpm & Node.js
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v6
         with:
           version: 9
       - uses: actions/setup-node@v4
@@ -154,7 +154,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up pnpm & Node.js
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v6
         with:
           version: 9
       - uses: actions/setup-node@v4
